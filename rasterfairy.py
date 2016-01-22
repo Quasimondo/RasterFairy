@@ -42,17 +42,18 @@ import numpy as np
 import prime
 import math
 
-def transformPointCloud2D( points2d, target = None, autoAdjustCount = True):
+def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, proportionThreshold = 0.4):
     pointCount = len(points2d)
     rasterMask = None
     
     if target is None:
         target = getRectArrangements(pointCount)[0]
-        if (float(target[0]) / float(target[1])<0.4):
-            w = int(math.sqrt(pointCount))
-            h = math.ceil(float(pointCount)/float(w))
-            target = (w,h)
-            
+        if (float(target[0]) / float(target[1])<proportionThreshold):
+            width = int(math.sqrt(pointCount))
+            height = int(math.ceil(float(pointCount)/float(width)))
+            print "no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height
+            target = {'width':width,'height':height,'mask':np.zeros((height,width),dtype=int), 'count':width*height, 'hex': False}
+        
     if type(target) is tuple and len(target)==2:
         print "using rectangle target"
         if target[0] * target[1] < pointCount:
@@ -60,6 +61,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True):
             return False
         width = target[0]
         height = target[1]
+        
     elif "PIL." in str(type(target)):
         print "using bitmap image target"
         rasterMask = getRasterMaskFromImage(target)
@@ -75,31 +77,37 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True):
         print "ERROR: raster mask target does not have enough grid points to hold data"
         return False
     
-    if not (rasterMask is None) and (rasterMask['count']!=len(points2d)) and (autoAdjustCount is True):
+    if not (rasterMask is None) and (rasterMask['count']!=len(points2d)):
         mask = rasterMask['mask'].flatten()
         count = len(points2d)
-        if count > rasterMask['count']:
-            ones = np.nonzero(mask)[0]
-            np.random.shuffle(ones)
-            mask[ones[0:count-rasterMask['count']]] = 0
-        elif count < rasterMask['count']:
-            zeros = np.nonzero(1-mask)[0]
-            np.random.shuffle(zeros)
-            mask[zeros[0:rasterMask['count']-count]] = 1
+        if autoAdjustCount is True:
+            
+            if count > rasterMask['count']:
+                ones = np.nonzero(mask)[0]
+                np.random.shuffle(ones)
+                mask[ones[0:count-rasterMask['count']]] = 0
+            elif count < rasterMask['count']:
+                zeros = np.nonzero(1-mask)[0]
+                np.random.shuffle(zeros)
+                mask[zeros[0:rasterMask['count']-count]] = 1
+        else:
+            if count > rasterMask['count']:
+                ones = np.nonzero(mask)[0]
+                mask[ones[rasterMask['count']]-count:] = 0
+            elif count < rasterMask['count']:
+                zeros = np.nonzero(1-mask)[0]
+                mask[zeros[rasterMask['count']-count]] = 1
+                
         mask = mask.reshape((rasterMask['height'], rasterMask['width']))
         rasterMask = {'width':rasterMask['width'],'height':rasterMask['height'],'mask':mask, 'count':count, 'hex': rasterMask['hex']}
-    
     quadrants = [{'points':points2d, 'grid':[0,0,width,height], 'indices':np.arange(pointCount)}]
     i = 0
     while i < len(quadrants) and len(quadrants) < pointCount:
         if ( len(quadrants[i]['points']) > 1 ):
             slices = sliceQuadrant(quadrants[i], mask = rasterMask)
             del quadrants[i]
-            if len(slices)==0:
-                print i,len(quadrants),"zero"
             quadrants += slices
             i = 0
-            
         else:
             i+=1
 
@@ -159,14 +167,15 @@ def sliceQuadrant( quadrant, mask = None ):
         for i in range(sliceCount):
             sliceObject = {} 
             sliceObject['points'] = xy[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
-            sliceObject['indices'] = indices[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
-            if splitX:
-                sliceObject['grid'] = [gridOffset,grid[1],sliceSize,grid[3]]
-                gridOffset += sliceObject['grid'][2]
-            else:
-                sliceObject['grid'] = [grid[0],gridOffset,grid[2],sliceSize]
-                gridOffset += sliceObject['grid'][3]
-            slices.append(sliceObject)  
+            if len(sliceObject['points'])>0:
+                sliceObject['indices'] = indices[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
+                if splitX:
+                    sliceObject['grid'] = [gridOffset,grid[1],sliceSize,grid[3]]
+                    gridOffset += sliceObject['grid'][2]
+                else:
+                    sliceObject['grid'] = [grid[0],gridOffset,grid[2],sliceSize]
+                    gridOffset += sliceObject['grid'][3]
+                    slices.append(sliceObject)  
             
     else:
         
@@ -338,19 +347,12 @@ def getCircleRasterMask( r, innerRingRadius = 0, rasterCount = None, autoAdjustC
         p = p.flatten()&1
         if count < rasterCount:
             ones = np.nonzero(p)[0]
-            print ones
-            print p
-            print "ones",len(ones),rasterCount-count
             np.random.shuffle(ones)
             p[ones[0:rasterCount-count]] = 0
             count = rasterCount
         elif count > rasterCount:
             zeros = np.nonzero(1-p)[0]
             np.random.shuffle(zeros)
-            print zeros
-            print p
-            print "zeros",len(zeros),count-rasterCount
-            
             p[zeros[0:count-rasterCount]] = 1
             count = rasterCount        
         p = p.reshape((d,d))
