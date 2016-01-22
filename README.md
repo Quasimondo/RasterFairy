@@ -30,6 +30,13 @@ grid_xy = rasterfairy.transformPointCloud2D(xy)
 #grid_xy will contain the points in the same order but aligned to a grid
 ```
 
+To-Do
+-----
+* Add hexagonal circle grid
+* Add optional warp class
+* Add random neighbor swapping post-processing
+* Look into further improving splitting process
+
 
 A note about porting this to other languages
 -----
