@@ -30,3 +30,14 @@ grid_xy = rasterfairy.transformPointCloud2D(xy)
 #grid_xy will contain the points in the same order but aligned to a grid
 ```
 
+
+A note about porting this to other languages
+-----
+
+If you want to port this algorithm to another language like C++, Javascript or COBOL I'm very happy about it.
+Only there is a little thing about "porting etiquette" I want to mention - yes, it will take you some
+work to translate those 500+ lines of code into the language of your choice and you might have to change
+a few things to make it work. Nevertheless, the algorithm stays the same and yes - I'm probably quite
+vain here - but I like to read my name. In big letters. Bigger than yours. And don't even think about
+writing anything like "insipired by". So the proper titling for a port will read something like
+"Raster Fairy by Mario Klingemann, C++ port by YOU".  
