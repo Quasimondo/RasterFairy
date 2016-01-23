@@ -2,6 +2,12 @@
 # Coon Warp v1.0,
 # released 23.01.2016
 #
+#
+# Based on Paul s. Heckbert's "Bilinear coons patch image warping"
+# Graphics gems IV, Pages 438-446 
+# http://dl.acm.org/citation.cfm?id=180937
+#
+#
 # Copyright (c) 2016, Mario Klingemann, mario@quasimondo.com
 # All rights reserved.
 # 
