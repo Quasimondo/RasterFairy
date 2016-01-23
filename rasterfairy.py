@@ -1,5 +1,5 @@
 # 
-# Raster Fairy v1.0,
+# Raster Fairy v1.0.1,
 # released 22.01.2016
 #
 # The purpose of Raster Fairy is to transform any kind of 2D point cloud into
@@ -111,7 +111,6 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         else:
             i+=1
 
-
     gridPoints2d = points2d.copy()
 
     if not (rasterMask is None) and rasterMask['hex'] is True:
@@ -149,7 +148,7 @@ def sliceQuadrant( quadrant, mask = None ):
                 sliceYCount+=1
         else:
             sliceYCount = grid[2]
-            
+        
         splitX = (sliceXCount<sliceYCount or (sliceXCount==sliceYCount and grid[2]>grid[3]))
         if splitX:
             order = np.lexsort((xy[:,1],xy[:,0]))
@@ -163,7 +162,6 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceSize = grid[3] / sliceCount
             pointsPerSlice = grid[2] * sliceSize
             gridOffset = grid[1]
-            
         for i in range(sliceCount):
             sliceObject = {} 
             sliceObject['points'] = xy[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
@@ -175,7 +173,7 @@ def sliceQuadrant( quadrant, mask = None ):
                 else:
                     sliceObject['grid'] = [grid[0],gridOffset,grid[2],sliceSize]
                     gridOffset += sliceObject['grid'][3]
-                    slices.append(sliceObject)  
+                slices.append(sliceObject)  
             
     else:
         
