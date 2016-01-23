@@ -38,9 +38,18 @@ grid_xy = rasterfairy.transformPointCloud2D(xy)
 To-Do
 -----
 * Add hexagonal circle grid
-* Add optional warp class
 * Add random neighbor swapping post-processing
 * Look into further improving splitting process
+
+
+Related Projects
+-----
+As I learned after publishing there is a very similar earlier developed technique called IsoMatch
+by O. Fried, S. DiVerdi, M. Halber, E. Sizikova and A. Finkelstein. 
+Unfortunately I was not aware of it during my research and their solution works differently, but
+you might want to check it out and see if it's better suited to your requirements:
+[IsoMatch](http://gfx.cs.princeton.edu/pubs/Fried_2015_ICI/index.php)
+[Codebase](https://github.com/ohadf/isomatch)
 
 
 A note about porting this to other languages
