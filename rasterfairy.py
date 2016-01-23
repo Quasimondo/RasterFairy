@@ -1,5 +1,5 @@
 # 
-# Raster Fairy v1.0.1,
+# Raster Fairy v1.0.2,
 # released 22.01.2016
 #
 # The purpose of Raster Fairy is to transform any kind of 2D point cloud into
@@ -55,7 +55,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
             target = {'width':width,'height':height,'mask':np.zeros((height,width),dtype=int), 'count':width*height, 'hex': False}
         
     if type(target) is tuple and len(target)==2:
-        print "using rectangle target"
+        #print "using rectangle target"
         if target[0] * target[1] < pointCount:
             print "ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs "+pointCount+" data points"
             return False
@@ -63,12 +63,12 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         height = target[1]
         
     elif "PIL." in str(type(target)):
-        print "using bitmap image target"
+        #print "using bitmap image target"
         rasterMask = getRasterMaskFromImage(target)
         width = rasterMask['width']
         height = rasterMask['height']
     elif 'mask' in target and 'count' in target and 'width' in target and 'height' in target:
-        print "using raster mask target"
+        #print "using raster mask target"
         rasterMask = target
         width = rasterMask['width']
         height = rasterMask['height']
@@ -115,9 +115,12 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
 
     if not (rasterMask is None) and rasterMask['hex'] is True:
         f = math.sqrt(3.0)/2.0 
+        offset = -0.5
+        if np.argmin(rasterMask['mask'][0]) > np.argmin(rasterMask['mask'][1]):
+            offset = 0.5
         for q in quadrants:
             if (q['grid'][1]%2==0):
-                q['grid'][0]-=0.5
+                q['grid'][0]-=offset
             q['grid'][1] *= f
 
     for q in quadrants:
@@ -412,7 +415,6 @@ def getShiftedSymmetricArrangements(n):
                 if i != row:
                     d.append(row+1)
                     d+=d[0:-1][::-1]
-                    #hits.append((i, row + 1))
                     hits.append({'hex':True,'rows':d,'type':'symmetric'})
                     break
             elif count <= 0:
