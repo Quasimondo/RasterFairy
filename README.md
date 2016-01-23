@@ -8,6 +8,7 @@ Requirements
 ------------
 
 * [numpy](numpy.scipy.org) > =1.7.1
+* [scipy](www.scipy.org) - only for coonswarp
 
 Installation
 ------------
@@ -15,7 +16,8 @@ Installation
 Version 1.0 is not at proper Python package yet, so just copy the files
 ```
 rasterfairy.py
-prime.py 
+prime.py
+coonswarp.py 
 ```
 into your application folder to use it
 
