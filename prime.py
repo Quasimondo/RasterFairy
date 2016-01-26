@@ -1,5 +1,5 @@
 # 
-# Prime Number Utility v1.01
+# Prime Number Utility v1.02
 # part of Raster Fairy v1.0,
 # released 22.01.2016
 #
@@ -110,29 +110,40 @@ class Prime():
         return n
     
     def getPermutations(self,symbols):
-        groupedSymbols = []
-        lastSymbol = symbols[0]
-        c = 1
-        for i in range(1,len(symbols)):
-            if symbols[i]==lastSymbol:
-                c+=1
-            else:
-                groupedSymbols.append((lastSymbol,c))
-                c= 1
-                lastSymbol = symbols[i]
-        groupedSymbols.append((lastSymbol,c))
-        n = self.factorial(len(groupedSymbols))
-        if n==1:
-            return [tuple(symbols[:])]
-        
-        perm = [];
-        for i in range(n):
-            permutation = self.getNthPermutation(groupedSymbols, i)
-            ungrouped = []
-            for p in permutation:
-                ungrouped+=[p[0]]*p[1]
-            perm.append(tuple(ungrouped))
-    
+        if len(symbols) < 10:
+            n = self.factorial(len(symbols))
+            if n==1:
+                return [tuple(symbols[:])]
+
+            perm = [];
+            for i in range(n):
+                perm.append(self.getNthPermutation(symbols, i))
+               
+        else:
+            print "too many possible permulations, creating grouped set"
+            groupedSymbols = []
+            lastSymbol = symbols[0]
+            c = 1
+            for i in range(1,len(symbols)):
+                if symbols[i]==lastSymbol:
+                    c+=1
+                else:
+                    groupedSymbols.append((lastSymbol,c))
+                    c= 1
+                    lastSymbol = symbols[i]
+            groupedSymbols.append((lastSymbol,c))
+            n = self.factorial(len(groupedSymbols))
+            if n==1:
+                return [tuple(symbols[:])]
+
+            perm = [];
+            for i in range(n):
+                permutation = self.getNthPermutation(groupedSymbols, i)
+                ungrouped = []
+                for p in permutation:
+                    ungrouped+=[p[0]]*p[1]
+                perm.append(tuple(ungrouped))
+
         return perm
     
     def factorial(self,n): 
