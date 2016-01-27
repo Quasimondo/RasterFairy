@@ -8,16 +8,17 @@ Requirements
 ------------
 
 * [numpy](numpy.scipy.org) > =1.7.1
-* [scipy](www.scipy.org) - only for coonswarp
+* [scipy](www.scipy.org) - only for coonswarp and rfoptimizer
 
 Installation
 ------------
 
-Version 1.0 is not at proper Python package yet, so just copy the files
+Version 1.02 is not at proper Python package yet, so just copy the files
 ```
 rasterfairy.py
 prime.py
 coonswarp.py 
+rfoptimizer.py 
 ```
 into your application folder to use it
 
@@ -38,7 +39,6 @@ grid_xy = rasterfairy.transformPointCloud2D(xy)
 To-Do
 -----
 * Add hexagonal circle grid
-* Add random neighbor swapping post-processing
 * Look into further improving splitting process
 
 
@@ -51,6 +51,10 @@ you might want to check it out and see if it's better suited to your requirement
 [IsoMatch](http://gfx.cs.princeton.edu/pubs/Fried_2015_ICI/index.php)
 [Codebase](https://github.com/ohadf/isomatch)
 
+Another related technique is Kernelized Sorting by Novi Quadrianto, Le Song, Alex J. Smola. from 2009 
+[Kernelized Sorting](http://users.sussex.ac.uk/~nq28/kernelized_sorting.html)
+
+Kyle McDonald's [CloudToGrid](https://github.com/kylemcdonald/CloudToGrid) project is a Python-based implementation of the Hungarian method.
 
 A note about porting this to other languages
 -----

@@ -52,8 +52,8 @@ class PrimeNumber():
     
 class Prime():
     
-    firstPrime = PrimeNumber(2);
-    lastPrime = firstPrime.setNext(3).setNext(5).setNext(7);
+    firstPrime = PrimeNumber(2)
+    lastPrime = firstPrime.setNext(3).setNext(5).setNext(7)
 
     def getPrimeFactors(self,n): 
         result = []
@@ -83,11 +83,11 @@ class Prime():
                 return False
             p = p.nextPrime
 
-        divisor = self.lastPrime.n + 2;
+        divisor = self.lastPrime.n + 2
         while divisor <= maxCheck:
             if not self.isPrime(divisor):
                 divisor += 2
-                continue;
+                continue
             self.lastPrime = self.lastPrime.setNext(divisor)
             if divisor > maxCheck:
                 return True
@@ -115,12 +115,12 @@ class Prime():
             if n==1:
                 return [tuple(symbols[:])]
 
-            perm = [];
+            perm = []
             for i in range(n):
                 perm.append(self.getNthPermutation(symbols, i))
                
         else:
-            print "too many possible permulations, creating grouped set"
+            print "not enough memory for amount of possible permutations, creating grouped set"
             groupedSymbols = []
             lastSymbol = symbols[0]
             c = 1
@@ -136,7 +136,7 @@ class Prime():
             if n==1:
                 return [tuple(symbols[:])]
 
-            perm = [];
+            perm = []
             for i in range(n):
                 permutation = self.getNthPermutation(groupedSymbols, i)
                 ungrouped = []
@@ -154,7 +154,7 @@ class Prime():
         return r
     
     def getNthPermutation(self,symbols, n):
-        return self.permutation(symbols, self.n_to_factoradic(n));
+        return self.permutation(symbols, self.n_to_factoradic(n))
 
 
     def n_to_factoradic(self,n, p = 2):
