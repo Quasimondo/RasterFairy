@@ -155,7 +155,7 @@ class Prime():
         return r
     
     def getNthPermutation(self,symbols, n):
-        return self.permutation(symbols, self.n_to_factoradic(n))
+        return self.permutation(symbols, map(int, self.n_to_factoradic(n)))
 
 
     def n_to_factoradic(self,n, p = 2):
