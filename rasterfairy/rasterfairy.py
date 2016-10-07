@@ -1,5 +1,5 @@
 # 
-# Raster Fairy v1.0.2,
+# Raster Fairy v1.0.3,
 # released 22.01.2016
 #
 # The purpose of Raster Fairy is to transform any kind of 2D point cloud into
@@ -38,8 +38,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-from functools import cmp_to_key
 import numpy as np
 import prime
 import math
@@ -53,30 +51,30 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         if (float(target[0]) / float(target[1])<proportionThreshold):
             width = int(math.sqrt(pointCount))
             height = int(math.ceil(float(pointCount)/float(width)))
-            print("no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height)
+            print "no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height
             target = {'width':width,'height':height,'mask':np.zeros((height,width),dtype=int), 'count':width*height, 'hex': False}
         
     if type(target) is tuple and len(target)==2:
-        #print("using rectangle target")
+        #print "using rectangle target"
         if target[0] * target[1] < pointCount:
-            print("ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs "+pointCount+" data points")
+            print "ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs "+pointCount+" data points"
             return False
         width = target[0]
         height = target[1]
         
     elif "PIL." in str(type(target)):
-        #print("using bitmap image target")
+        #print "using bitmap image target"
         rasterMask = getRasterMaskFromImage(target)
         width = rasterMask['width']
         height = rasterMask['height']
     elif 'mask' in target and 'count' in target and 'width' in target and 'height' in target:
-        #print("using raster mask target")
+        #print "using raster mask target"
         rasterMask = target
         width = rasterMask['width']
         height = rasterMask['height']
     
     if not (rasterMask is None) and rasterMask['mask'].shape[0]*rasterMask['mask'].shape[1]-np.sum( rasterMask['mask'].flat) < len(points2d):
-        print("ERROR: raster mask target does not have enough grid points to hold data")
+        print "ERROR: raster mask target does not have enough grid points to hold data"
         return False
     
     if not (rasterMask is None) and (rasterMask['count']!=len(points2d)):
@@ -128,7 +126,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
     for q in quadrants:
         gridPoints2d[q['indices'][0]] = np.array(q['grid'][0:2],dtype=np.float)
 
-    return gridPoints2d
+    return gridPoints2d, (width, height)
 
 
 def sliceQuadrant( quadrant, mask = None ):
@@ -359,7 +357,7 @@ def getCircleRasterMask( r, innerRingRadius = 0, rasterCount = None, autoAdjustC
             p[zeros[0:count-rasterCount]] = 1
             count = rasterCount        
         p = p.reshape((d,d))
-    #print("adjusted count",p.shape[0] * p.shape[1]- np.sum(p))
+    #print "adjusted count",p.shape[0] * p.shape[1]- np.sum(p)
     return {'width':d,'height':d,'mask':p, 'count':count}
         
 def getRectArrangements(n):
@@ -377,19 +375,19 @@ def getRectArrangements(n):
                 v2 = multiplyArray(perm[i:])
                 arrangements.add((min(v1, v2),max(v1, v2)))
 
-    return sorted(list(arrangements), key=cmp_to_key(proportion_sort), reverse=True)
+    return sorted(list(arrangements), cmp=proportion_sort, reverse=True)
 
 def getShiftedAlternatingRectArrangements(n):
     arrangements = set([])
     for x in range(1,n >> 1):
         v = 2 * x + 1
         if n % v == x:
-            arrangements.add((x, x + 1, math.floor(n / v) * 2 + 1))
+            arrangements.add((x, x + 1, ((n / v) | 0) * 2 + 1))
         
     for x in range(2,1 + (n >> 1)):
         v = 2 * x - 1
         if n % v == x:
-            arrangements.add((x, x - 1, math.floor(n / v) * 2 + 1))
+            arrangements.add((x, x - 1, ((n / v) | 0) * 2 + 1))
     
     result = []
     for a in arrangements:
@@ -445,12 +443,12 @@ def getAlternatingRectArrangements(n):
     for x in range(1,n >> 1):
         v = 2 * x + 2
         if n % v == x:
-            arrangements.add((x, x + 2, math.floor(n / v) * 2 + 1))
+            arrangements.add((x, x + 2, ((n / v) | 0) * 2 + 1))
         
     for x in range(2,1 + (n >> 1)):
         v = 2 * x - 2
         if n % v == x:
-            arrangements.add((x, x -2, math.floor(n / v) * 2 + 1))
+            arrangements.add((x, x -2, ((n / v) | 0) * 2 + 1))
     
     result = []
     for a in arrangements:
@@ -520,7 +518,7 @@ def arrangementListToRasterMasks( arrangements ):
     masks = []
     for i in range(len(arrangements)):
         masks.append(arrangementToRasterMask(arrangements[i]))
-    return sorted(masks, key=cmp_to_key(arrangement_sort), reverse=True)
+    return sorted(masks, cmp=arrangement_sort, reverse=True)
 
 def arrangementToRasterMask( arrangement ):
     rows = np.array(arrangement['rows'])
@@ -535,7 +533,26 @@ def arrangementToRasterMask( arrangement ):
 
     return {'width':width,'height':height,'mask':mask, 'count':np.sum(rows),'hex':arrangement['hex'],'type':arrangement['type']}
 
+def rasterMaskToGrid( rasterMask ):
+    grid = []
+    mask = rasterMask['mask']
+    for y in range(rasterMask['height']):
+        for x in range(rasterMask['width']):
+            if mask[y,x]==0:
+                grid.append([x,y])
     
+    grid = np.array(grid,dtype=np.float)
+    if not (rasterMask is None) and rasterMask['hex'] is True:
+        f = math.sqrt(3.0)/2.0 
+        offset = -0.5
+        if np.argmin(rasterMask['mask'][0]) > np.argmin(rasterMask['mask'][1]):
+            offset = 0.5
+        for i in range(len(grid)):
+            if (grid[i][1]%2.0==0.0):
+                grid[i][0]-=offset
+            grid[i][1] *= f
+    return grid
+            
 
 def getBestCircularMatch(n):
     bestc = n*2
