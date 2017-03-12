@@ -102,19 +102,21 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         rasterMask = {'width':rasterMask['width'],'height':rasterMask['height'],'mask':mask, 'count':count, 'hex': rasterMask['hex']}
     quadrants = [{'points':points2d, 'grid':[0,0,width,height], 'indices':np.arange(pointCount)}]
     i = 0
-    failsafe = 10000
-    while i < len(quadrants) and len(quadrants) < pointCount and failsafe > 0:
+    failedSlices = 0
+    while i < len(quadrants) and len(quadrants) < pointCount:
         if ( len(quadrants[i]['points']) > 1 ):
             slices = sliceQuadrant(quadrants[i], mask = rasterMask)
-            del quadrants[i]
-            quadrants += slices
-            i = 0
-            failsafe -= 1
+            if len(slices)>1:
+                del quadrants[i]
+                quadrants += slices
+                i = 0
+            else:
+                failedSlices += 1
         else:
             i+=1
             
-    if failsafe==0:
-        print "WARNING - There is a problem with the data. Try using autoAdjustCount=True as a workaround"
+    if failedSlices>0:
+        print "WARNING - There might be a problem with the data. Try using autoAdjustCount=True as a workaround or check if you have points with identical coordinates in your set."
 
     gridPoints2d = points2d.copy()
 
