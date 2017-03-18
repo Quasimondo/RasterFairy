@@ -6,22 +6,17 @@ The purpose of Raster Fairy is to transform any kind of 2D point cloud into a re
 
 Requirements
 ------------
-
+* Python 2.7 (Python 3 is not supported yet)
 * [numpy](numpy.scipy.org) > =1.7.1
 * [scipy](www.scipy.org) - only for coonswarp and rfoptimizer
 
 Installation
 ------------
 
-Version 1.02 is not at proper Python package yet, so just copy the files
+From the root directory, run:
 ```
-rasterfairy.py
-prime.py
-coonswarp.py 
-rfoptimizer.py 
+pip install .
 ```
-into your application folder to use it
-
 
 Usage
 -----
@@ -40,6 +35,7 @@ To-Do
 -----
 * Add hexagonal circle grid
 * Look into further improving splitting process
+* Add Python 3 support
 
 
 Related Projects
