@@ -161,13 +161,13 @@ def sliceQuadrant( quadrant, mask = None ):
         
         splitX = (sliceXCount<sliceYCount or (sliceXCount==sliceYCount and grid[2]>grid[3]))
         if splitX:
-            order = np.lexsort((int(xy[:,1]),int(xy[:,0])))
+            order = np.lexsort((xy[:,1].astype(int),xy[:,0].astype(int)))
             sliceCount = sliceXCount
             sliceSize  = grid[2] / sliceCount
             pointsPerSlice = grid[3] * sliceSize
             gridOffset = grid[0]
         else:
-            order = np.lexsort((int(xy[:,0]),int(xy[:,1])))    
+            order = np.lexsort((xy[:,0].astype(int),xy[:,1].astype(int)))    
             sliceCount = sliceYCount
             sliceSize = grid[3] / sliceCount
             pointsPerSlice = grid[2] * sliceSize
@@ -202,7 +202,7 @@ def sliceQuadrant( quadrant, mask = None ):
             countY += rowCounts[splitRow]
             splitRow+=1
         
-        order = np.lexsort((int(xy[:,1]),int(xy[:,0])))
+        order = np.lexsort((xy[:,1].astype(int),xy[:,0].astype(int)))
         slicesX = []
         if countX > 0:
             sliceObject = {} 
@@ -222,7 +222,7 @@ def sliceQuadrant( quadrant, mask = None ):
             cropGrid(mask['mask'],sliceObject['grid'])
             slicesX.append(sliceObject)   
         
-        order = np.lexsort((int(xy[:,0]),int(xy[:,1])))
+        order = np.lexsort((xy[:,0].astype(int),xy[:,1].astype(int)))
         slicesY = []
         if countY > 0:
             sliceObject = {} 
