@@ -143,7 +143,7 @@ def intToBin(i):
     """ Integer to two bytes """
     # devide in two parts (bytes)
     i1 = i % 256
-    i2 = int( i/256)
+    i2 = int( i//256)
     # make string (little endian)
     return chr(i1) + chr(i2)
 
@@ -728,7 +728,7 @@ class NeuQuant:
         self.CUTNETSIZE = self.NETSIZE - self.SPECIALS
         self.MAXNETPOS = self.NETSIZE - 1
 
-        self.INITRAD = self.NETSIZE/8 # For 256 colours, radius starts at 32
+        self.INITRAD = self.NETSIZE//8 # For 256 colours, radius starts at 32
         self.RADIUSBIASSHIFT = 6
         self.RADIUSBIAS = 1 << self.RADIUSBIASSHIFT
         self.INITBIASRADIUS = self.INITRAD * self.RADIUSBIAS
@@ -896,8 +896,8 @@ class NeuQuant:
         biasRadius = self.INITBIASRADIUS
         alphadec = 30 + ((self.samplefac-1)/3)
         lengthcount = self.pixels.size
-        samplepixels = lengthcount / self.samplefac
-        delta = samplepixels / self.NCYCLES
+        samplepixels = lengthcount // self.samplefac
+        delta = samplepixels // self.NCYCLES
         alpha = self.INITALPHA
 
         i = 0;
@@ -905,8 +905,8 @@ class NeuQuant:
         if rad <= 1:
             rad = 0
 
-        print("Beginning 1D learning: samplepixels = %1.2f  rad = %i" %
-                                                    (samplepixels, rad) )
+        print(("Beginning 1D learning: samplepixels = %1.2f  rad = %i" %
+                                                    (samplepixels, rad) ))
         step = 0
         pos = 0
         if lengthcount%NeuQuant.PRIME1 != 0:
@@ -923,8 +923,8 @@ class NeuQuant:
         while i < samplepixels:
             if i%100 == 99:
                 tmp = '\b'*len(printed_string)
-                printed_string = str((i+1)*100/samplepixels)+"%\n"
-                print(tmp + printed_string)
+                printed_string = str((i+1)*100//samplepixels)+"%\n"
+                print((tmp + printed_string))
             p = self.pixels[pos]
             r = (p >> 16) & 0xff
             g = (p >>  8) & 0xff
@@ -954,7 +954,7 @@ class NeuQuant:
                     rad = 0
 
         finalAlpha = (1.0*alpha)/self.INITALPHA
-        print("Finished 1D learning: final alpha = %1.2f!" % finalAlpha)
+        print(("Finished 1D learning: final alpha = %1.2f!" % finalAlpha))
 
     def fix(self):
         for i in range(self.NETSIZE):
@@ -1032,7 +1032,7 @@ class NeuQuant:
         kdtree = cKDTree(self.colormap[:,:3],leafsize=10)
         result = kdtree.query(px2)
         colorindex = result[1]
-        print("Distance: %1.2f" % (result[0].sum()/(w*h)) )
+        print(("Distance: %1.2f" % (result[0].sum()//(w*h)) ))
         px2[:] = self.colormap[colorindex,:3]
 
         return Image.fromarray(px).convert("RGB").quantize(palette=self.paletteImage())

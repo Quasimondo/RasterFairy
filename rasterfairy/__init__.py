@@ -2,5 +2,5 @@
 # -*- coding: utf-8 -*-
 """Top-level module for RasterFairy"""
 
-from rasterfairy import *
+from .rasterfairy import *
 

@@ -120,7 +120,7 @@ def getCloudHull(xyc,width=64,height=64,perimeterSubdivisionSteps=4,smoothing=0.
         perimeterLength += distance.euclidean(hullPoints[i],hullPoints[(i+1)%len(hullPoints)])
 
     perimeterCount = 2 * (width + height) - 4
-    perimeterStep = perimeterLength / perimeterCount
+    perimeterStep = perimeterLength // perimeterCount
     perimeterPoints = []
     perimeterDensity = np.zeros(perimeterCount)
     
