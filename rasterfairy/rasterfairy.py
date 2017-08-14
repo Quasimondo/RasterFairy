@@ -57,7 +57,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
     if type(target) is tuple and len(target)==2:
         #print "using rectangle target"
         if target[0] * target[1] < pointCount:
-            print "ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs "+pointCount+" data points"
+            print "ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs ",pointCount," data points"
             return False
         width = target[0]
         height = target[1]
