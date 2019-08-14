@@ -39,7 +39,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
-import prime
+from .prime import Prime
 import math
 
 def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, proportionThreshold = 0.4):
@@ -51,13 +51,13 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         if (float(target[0]) / float(target[1])<proportionThreshold):
             width = int(math.sqrt(pointCount))
             height = int(math.ceil(float(pointCount)/float(width)))
-            print "no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height
+            print("no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height)
             target = {'width':width,'height':height,'mask':np.zeros((height,width),dtype=int), 'count':width*height, 'hex': False}
         
     if type(target) is tuple and len(target)==2:
         #print "using rectangle target"
         if target[0] * target[1] < pointCount:
-            print "ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs ",pointCount," data points"
+            print("ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs ",pointCount," data points")
             return False
         width = target[0]
         height = target[1]
@@ -74,7 +74,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         height = rasterMask['height']
     
     if not (rasterMask is None) and rasterMask['mask'].shape[0]*rasterMask['mask'].shape[1]-np.sum( rasterMask['mask'].flat) < len(points2d):
-        print "ERROR: raster mask target does not have enough grid points to hold data"
+        print("ERROR: raster mask target does not have enough grid points to hold data")
         return False
     
     if not (rasterMask is None) and (rasterMask['count']!=len(points2d)):
@@ -116,7 +116,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
             i+=1
             
     if failedSlices>0:
-        print "WARNING - There might be a problem with the data. Try using autoAdjustCount=True as a workaround or check if you have points with identical coordinates in your set."
+        print("WARNING - There might be a problem with the data. Try using autoAdjustCount=True as a workaround or check if you have points with identical coordinates in your set.")
 
     gridPoints2d = points2d.copy()
 
@@ -163,13 +163,13 @@ def sliceQuadrant( quadrant, mask = None ):
         if splitX:
             order = np.lexsort((xy[:,1].astype(int),xy[:,0].astype(int)))
             sliceCount = sliceXCount
-            sliceSize  = grid[2] / sliceCount
+            sliceSize  = grid[2] // sliceCount
             pointsPerSlice = grid[3] * sliceSize
             gridOffset = grid[0]
         else:
             order = np.lexsort((xy[:,0].astype(int),xy[:,1].astype(int)))    
             sliceCount = sliceYCount
-            sliceSize = grid[3] / sliceCount
+            sliceSize = grid[3] // sliceCount
             pointsPerSlice = grid[2] * sliceSize
             gridOffset = grid[1]
         for i in range(sliceCount):
@@ -367,7 +367,7 @@ def getCircleRasterMask( r, innerRingRadius = 0, rasterCount = None, autoAdjustC
     return {'width':d,'height':d,'mask':p, 'count':count}
         
 def getRectArrangements(n):
-    p = prime.Prime()
+    p = Prime()
     f = p.getPrimeFactors(n)
     f_count = len(f)
     ma = multiplyArray(f)
@@ -381,7 +381,7 @@ def getRectArrangements(n):
                 v2 = multiplyArray(perm[i:])
                 arrangements.add((min(v1, v2),max(v1, v2)))
 
-    return sorted(list(arrangements), cmp=proportion_sort, reverse=True)
+    return sorted(list(arrangements), key=proportion_sort, reverse=True)
 
 def getShiftedAlternatingRectArrangements(n):
     arrangements = set([])
@@ -524,7 +524,7 @@ def arrangementListToRasterMasks( arrangements ):
     masks = []
     for i in range(len(arrangements)):
         masks.append(arrangementToRasterMask(arrangements[i]))
-    return sorted(masks, cmp=arrangement_sort, reverse=True)
+    return sorted(masks, key=arrangement_sort, reverse=True)
 
 def arrangementToRasterMask( arrangement ):
     rows = np.array(arrangement['rows'])
@@ -597,14 +597,15 @@ def getCircularArrangement(radius,adjustFactor):
     
     return {'hex':False,'rows':rows,'type':'circular'}
 
-def arrangement_sort(x, y):
-    return int(100000000*(abs(float(min(x['width'],x['height'])) / float(max(x['width'],x['height']))) - abs(float(min(y['width'],y['height'])) / float(max(y['width'],y['height'])))))
+def arrangement_sort(x):
+    return int(100000000*(abs(float(min(x['width'],x['height'])) / float(max(x['width'],x['height'])))))
 
-def proportion_sort(x, y):
-    return int(100000000*(abs(float(min(x[0],x[1])) / float(max(x[0],x[1]))) - abs(float(min(y[0],y[1])) / float(max(y[0],y[1])))))
+def proportion_sort(x):
+    return int(100000000*(abs(float(min(x[0],x[1])) / float(max(x[0],x[1])))))
 
 def multiplyArray(a):
     f = 1
     for v in a: 
         f *= v
     return f
+

@@ -120,7 +120,7 @@ class Prime():
                 perm.append(self.getNthPermutation(symbols, i))
                
         else:
-            print "not enough memory for amount of possible permutations, creating grouped set"
+            print("not enough memory for amount of possible permutations, creating grouped set")
             groupedSymbols = []
             lastSymbol = symbols[0]
             c = 1
@@ -160,7 +160,7 @@ class Prime():
     def n_to_factoradic(self,n, p = 2):
         if n < p:
             return [n]
-        ret = self.n_to_factoradic((n / p) | 0, p + 1)
+        ret = self.n_to_factoradic((n // p) | 0, p + 1)
         ret.append(n % p)
         return ret
     
@@ -178,3 +178,4 @@ class Prime():
             del s[f]
             
         return tuple(ret)
+
