@@ -9,7 +9,6 @@ Requirements
 * Python 2.7 and Python 3
 * [numpy](numpy.scipy.org) > =1.7.1
 * [scipy](www.scipy.org) - only for coonswarp and rfoptimizer
-* images2gif
 
 Installation
 ------------
