@@ -1,4 +1,7 @@
-# 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+#
 # Coon Warp v1.0,
 # released 23.01.2016
 #
@@ -32,6 +35,7 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 
 from scipy.spatial import ConvexHull, KDTree, distance
 import numpy as np
@@ -303,4 +307,3 @@ def getPointOnHull( hullPoints,t, totalLength ):
             t-= t_sub;
         else :
             return lerp(hullPoints[j%lh],hullPoints[(j+1)%lh], t / t_sub );
-         

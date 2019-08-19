@@ -1,4 +1,7 @@
-# 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+#
 # Raster Fairy v1.0.3,
 # released 22.01.2016
 #
@@ -39,8 +42,10 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
-import prime
+from rasterfairy import prime
+from rasterfairy.utils import cmp_to_key
 import math
+
 
 def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, proportionThreshold = 0.4):
     pointCount = len(points2d)
@@ -48,16 +53,16 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
     
     if target is None:
         target = getRectArrangements(pointCount)[0]
-        if (float(target[0]) / float(target[1])<proportionThreshold):
+        if float(target[0]) / float(target[1])<proportionThreshold:
             width = int(math.sqrt(pointCount))
             height = int(math.ceil(float(pointCount)/float(width)))
-            print "no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height
+            print("no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height)
             target = {'width':width,'height':height,'mask':np.zeros((height,width),dtype=int), 'count':width*height, 'hex': False}
         
     if type(target) is tuple and len(target)==2:
         #print "using rectangle target"
         if target[0] * target[1] < pointCount:
-            print "ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs ",pointCount," data points"
+            print("ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs ",pointCount," data points")
             return False
         width = target[0]
         height = target[1]
@@ -74,7 +79,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         height = rasterMask['height']
     
     if not (rasterMask is None) and rasterMask['mask'].shape[0]*rasterMask['mask'].shape[1]-np.sum( rasterMask['mask'].flat) < len(points2d):
-        print "ERROR: raster mask target does not have enough grid points to hold data"
+        print("ERROR: raster mask target does not have enough grid points to hold data")
         return False
     
     if not (rasterMask is None) and (rasterMask['count']!=len(points2d)):
@@ -116,7 +121,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
             i+=1
             
     if failedSlices>0:
-        print "WARNING - There might be a problem with the data. Try using autoAdjustCount=True as a workaround or check if you have points with identical coordinates in your set."
+        print("WARNING - There might be a problem with the data. Try using autoAdjustCount=True as a workaround or check if you have points with identical coordinates in your set.")
 
     gridPoints2d = points2d.copy()
 
@@ -126,7 +131,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         if np.argmin(rasterMask['mask'][0]) > np.argmin(rasterMask['mask'][1]):
             offset = 0.5
         for q in quadrants:
-            if (q['grid'][1]%2==0):
+            if q['grid'][1]%2==0:
                 q['grid'][0]-=offset
             q['grid'][1] *= f
 
@@ -173,7 +178,8 @@ def sliceQuadrant( quadrant, mask = None ):
             pointsPerSlice = grid[2] * sliceSize
             gridOffset = grid[1]
         for i in range(sliceCount):
-            sliceObject = {} 
+            sliceObject = {}
+            print(pointsPerSlice)
             sliceObject['points'] = xy[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
             if len(sliceObject['points'])>0:
                 sliceObject['indices'] = indices[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
@@ -363,7 +369,7 @@ def getCircleRasterMask( r, innerRingRadius = 0, rasterCount = None, autoAdjustC
             p[zeros[0:count-rasterCount]] = 1
             count = rasterCount        
         p = p.reshape((d,d))
-    #print "adjusted count",p.shape[0] * p.shape[1]- np.sum(p)
+    #print("adjusted count",p.shape[0] * p.shape[1]- np.sum(p))
     return {'width':d,'height':d,'mask':p, 'count':count}
         
 def getRectArrangements(n):
@@ -381,7 +387,7 @@ def getRectArrangements(n):
                 v2 = multiplyArray(perm[i:])
                 arrangements.add((min(v1, v2),max(v1, v2)))
 
-    return sorted(list(arrangements), cmp=proportion_sort, reverse=True)
+    return sorted(list(arrangements), key=cmp_to_key(proportion_sort), reverse=True)
 
 def getShiftedAlternatingRectArrangements(n):
     arrangements = set([])
