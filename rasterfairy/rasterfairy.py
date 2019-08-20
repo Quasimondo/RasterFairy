@@ -119,7 +119,6 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
                 failedSlices += 1
         else:
             i+=1
-            
     if failedSlices>0:
         print("WARNING - There might be a problem with the data. Try using autoAdjustCount=True as a workaround or check if you have points with identical coordinates in your set.")
 
@@ -179,7 +178,8 @@ def sliceQuadrant( quadrant, mask = None ):
             gridOffset = grid[1]
         for i in range(sliceCount):
             sliceObject = {}
-            print(pointsPerSlice)
+            # HOTFIX: indices must be integers!
+            pointsPerSlice = int(pointsPerSlice)
             sliceObject['points'] = xy[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
             if len(sliceObject['points'])>0:
                 sliceObject['indices'] = indices[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
@@ -394,12 +394,12 @@ def getShiftedAlternatingRectArrangements(n):
     for x in range(1,n >> 1):
         v = 2 * x + 1
         if n % v == x:
-            arrangements.add((x, x + 1, ((n / v) | 0) * 2 + 1))
+            arrangements.add((x, x + 1, ((n // v) | 0) * 2 + 1))
         
     for x in range(2,1 + (n >> 1)):
         v = 2 * x - 1
         if n % v == x:
-            arrangements.add((x, x - 1, ((n / v) | 0) * 2 + 1))
+            arrangements.add((x, x - 1, ((n // v) | 0) * 2 + 1))
     
     result = []
     for a in arrangements:
@@ -455,12 +455,12 @@ def getAlternatingRectArrangements(n):
     for x in range(1,n >> 1):
         v = 2 * x + 2
         if n % v == x:
-            arrangements.add((x, x + 2, ((n / v) | 0) * 2 + 1))
+            arrangements.add((x, x + 2, ((n // v) | 0) * 2 + 1))
         
     for x in range(2,1 + (n >> 1)):
         v = 2 * x - 2
         if n % v == x:
-            arrangements.add((x, x -2, ((n / v) | 0) * 2 + 1))
+            arrangements.add((x, x -2, ((n // v) | 0) * 2 + 1))
     
     result = []
     for a in arrangements:
@@ -530,7 +530,7 @@ def arrangementListToRasterMasks( arrangements ):
     masks = []
     for i in range(len(arrangements)):
         masks.append(arrangementToRasterMask(arrangements[i]))
-    return sorted(masks, cmp=arrangement_sort, reverse=True)
+    return sorted(masks, key=cmp_to_key(arrangement_sort), reverse=True)
 
 def arrangementToRasterMask( arrangement ):
     rows = np.array(arrangement['rows'])
