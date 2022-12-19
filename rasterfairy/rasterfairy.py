@@ -42,7 +42,7 @@ from __future__ import print_function
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
-from rasterfairy import prime
+import rasterfairy.prime as prime
 from rasterfairy.utils import cmp_to_key
 import math
 
