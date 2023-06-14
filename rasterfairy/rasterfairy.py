@@ -135,7 +135,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
             q['grid'][1] *= f
 
     for q in quadrants:
-        gridPoints2d[q['indices'][0]] = np.array(q['grid'][0:2],dtype=np.float)
+        gridPoints2d[q['indices'][0]] = np.array(q['grid'][0:2],dtype=float)
 
     return gridPoints2d, (width, height)
 
@@ -553,7 +553,7 @@ def rasterMaskToGrid( rasterMask ):
             if mask[y,x]==0:
                 grid.append([x,y])
     
-    grid = np.array(grid,dtype=np.float)
+    grid = np.array(grid,dtype=float)
     if not (rasterMask is None) and rasterMask['hex'] is True:
         f = math.sqrt(3.0)/2.0 
         offset = -0.5
