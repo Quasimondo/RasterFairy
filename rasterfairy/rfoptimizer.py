@@ -1,4 +1,7 @@
-# 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+#
 # Random Grid Swap Utility v1.0
 # part of Raster Fairy v1.02,
 # released 27.01.2016

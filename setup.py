@@ -63,10 +63,11 @@ setup(
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-    	'numpy >= 1.8.0',
-     	'scipy >= 0.13.0',
-     	'moviepy >= 0.2.3.5'
-	],
+        'numpy >= 1.8.0',
+        'scipy >= 0.13.0',
+        'moviepy >= 0.2.3.5',
+        'ipython',
+    ],
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). You can install these using the following syntax,
@@ -81,7 +82,7 @@ setup(
     # installed, specify them here.  If using Python 2.6 or less, then these
     # have to be included in MANIFEST.in as well.
     package_data={
-        #'sample': ['package_data.dat'],
+        # 'sample': ['package_data.dat'],
     },
 
     # Although 'package_data' is the preferred approach, in some case you may
@@ -89,15 +90,15 @@ setup(
     # http://docs.python.org/3.4/distutils/setupscript.html#installing-additional-files # noqa
     # In this case, 'data_file' will be installed into '<sys.prefix>/my_data'
     data_files=[
-		#('my_data', ['data/data_file'])
-	],
+        # ('my_data', ['data/data_file'])
+    ],
 
     # To provide executable scripts, use entry points in preference to the
     # "scripts" keyword. Entry points provide cross-platform support and allow
     # pip to create the appropriate form of executable for the target platform.
-    #entry_points={
+    # entry_points={
     #    'console_scripts': [
     #        'sample=sample:main',
     #    ],
-    #},
+    # },
 )

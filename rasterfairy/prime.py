@@ -1,4 +1,7 @@
-# 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+#
 # Prime Number Utility v1.02
 # part of Raster Fairy v1.0,
 # released 22.01.2016
