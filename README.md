@@ -68,3 +68,7 @@ a few things to make it work. Nevertheless, the algorithm stays the same and yes
 vain here - but I like to read my name. In big letters. Bigger than yours. And don't even think about
 writing anything like "insipired by". So the proper titling for a port will read something like
 "Raster Fairy by Mario Klingemann, C++ port by YOU".  
+
+Citations
+-----
+If you are using this work in a scientific publication, cite as Mario Klingemann. 2015. RasterFairy. https://github.com/Quasimondo/RasterFairy
