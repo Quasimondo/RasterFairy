@@ -137,6 +137,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
     for q in quadrants:
         gridPoints2d[q['indices'][0]] = np.array(q['grid'][0:2],dtype=float)
 
+
     return gridPoints2d, (width, height)
 
 
@@ -167,13 +168,13 @@ def sliceQuadrant( quadrant, mask = None ):
         if splitX:
             order = np.lexsort((xy[:,1].astype(int),xy[:,0].astype(int)))
             sliceCount = sliceXCount
-            sliceSize  = grid[2] / sliceCount
+            sliceSize  = grid[2] // sliceCount
             pointsPerSlice = grid[3] * sliceSize
             gridOffset = grid[0]
         else:
             order = np.lexsort((xy[:,0].astype(int),xy[:,1].astype(int)))    
             sliceCount = sliceYCount
-            sliceSize = grid[3] / sliceCount
+            sliceSize = grid[3] // sliceCount
             pointsPerSlice = grid[2] * sliceSize
             gridOffset = grid[1]
         for i in range(sliceCount):
@@ -373,7 +374,7 @@ def getCircleRasterMask( r, innerRingRadius = 0, rasterCount = None, autoAdjustC
     return {'width':d,'height':d,'mask':p, 'count':count}
         
 def getRectArrangements(n):
-    p = prime.Prime()
+    p = Prime()
     f = p.getPrimeFactors(n)
     f_count = len(f)
     ma = multiplyArray(f)
@@ -386,6 +387,7 @@ def getRectArrangements(n):
                 v1 = multiplyArray(perm[0:i])
                 v2 = multiplyArray(perm[i:])
                 arrangements.add((min(v1, v2),max(v1, v2)))
+
 
     return sorted(list(arrangements), key=cmp_to_key(proportion_sort), reverse=True)
 
@@ -530,7 +532,9 @@ def arrangementListToRasterMasks( arrangements ):
     masks = []
     for i in range(len(arrangements)):
         masks.append(arrangementToRasterMask(arrangements[i]))
+
     return sorted(masks, key=cmp_to_key(arrangement_sort), reverse=True)
+
 
 def arrangementToRasterMask( arrangement ):
     rows = np.array(arrangement['rows'])
@@ -554,6 +558,7 @@ def rasterMaskToGrid( rasterMask ):
                 grid.append([x,y])
     
     grid = np.array(grid,dtype=float)
+
     if not (rasterMask is None) and rasterMask['hex'] is True:
         f = math.sqrt(3.0)/2.0 
         offset = -0.5
@@ -603,14 +608,15 @@ def getCircularArrangement(radius,adjustFactor):
     
     return {'hex':False,'rows':rows,'type':'circular'}
 
-def arrangement_sort(x, y):
-    return int(100000000*(abs(float(min(x['width'],x['height'])) / float(max(x['width'],x['height']))) - abs(float(min(y['width'],y['height'])) / float(max(y['width'],y['height'])))))
+def arrangement_sort(x):
+    return int(100000000*(abs(float(min(x['width'],x['height'])) / float(max(x['width'],x['height'])))))
 
-def proportion_sort(x, y):
-    return int(100000000*(abs(float(min(x[0],x[1])) / float(max(x[0],x[1]))) - abs(float(min(y[0],y[1])) / float(max(y[0],y[1])))))
+def proportion_sort(x):
+    return int(100000000*(abs(float(min(x[0],x[1])) / float(max(x[0],x[1])))))
 
 def multiplyArray(a):
     f = 1
     for v in a: 
         f *= v
     return f
+

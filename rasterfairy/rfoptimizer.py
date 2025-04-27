@@ -558,4 +558,4 @@ class SwapOptimizer:
             b[idx] = 0.0001
         elif b[idx]>10000.0:
             b[idx]=10000.0
-    
+
