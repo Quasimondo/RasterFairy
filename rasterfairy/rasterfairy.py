@@ -524,7 +524,7 @@ def getRectArrangements(n):
                 arrangements.add((min(v1, v2),max(v1, v2)))
 
 
-    return sorted(list(arrangements), key=cmp_to_key(proportion_sort), reverse=True)
+    return sorted(list(arrangements), key=cmp_to_key(proportion_sort), reverse=False)
 
 def getShiftedAlternatingRectArrangements(n):
     """Generates arrangements for hexagonal grids with alternating row lengths (shifted).
