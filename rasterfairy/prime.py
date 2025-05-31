@@ -45,44 +45,32 @@ and permutations.
 """
 
 import math
+from collections import Counter
+from itertools import permutations
 
-class PrimeNumber():
+class PrimeNumber:
     """Represents a node in a linked list of prime numbers."""
-    def __init__(self,n):
-        """Initializes a PrimeNumber object.
-
-        Args:
-            n: An integer representing the prime number.
-        """
+    def __init__(self, n):
         self.n = n
         self.nextPrime = None
     
-    def setNext(self,n):
-        """Sets the next prime number in the linked list.
-
-        Args:
-            n: An integer representing the next prime number.
-
-        Returns:
-            A new PrimeNumber object representing the next prime.
-        """
+    def setNext(self, n):
         self.nextPrime = PrimeNumber(n)
         return self.nextPrime
-    
-class Prime():
+
+class Prime:
     """Provides methods for prime number generation, factorization, and permutations."""
-    firstPrime = PrimeNumber(2)
-    lastPrime = firstPrime.setNext(3).setNext(5).setNext(7)
+    
+    def __init__(self, max_permutations=1000000):
+        self.firstPrime = PrimeNumber(2)
+        self.lastPrime = self.firstPrime.setNext(3).setNext(5).setNext(7)
+        self.max_permutations = max_permutations
 
-    def getPrimeFactors(self,n):
-        """Calculates the prime factors of a given integer.
-
-        Args:
-            n: An integer for which to find prime factors.
-
-        Returns:
-            A list of integers representing the prime factors of n.
-        """
+    def getPrimeFactors(self, n):
+        """Calculates the prime factors of a given integer."""
+        if n <= 1:
+            return []
+        
         result = []
         factor = 2
         while n > 1:
@@ -91,24 +79,23 @@ class Prime():
                 n //= factor
             else:
                 factor = self.nextPrime(factor)
-                
         return result
 
-    def isPrime(self,n):
-        """Checks if a given integer is a prime number.
-
-        This method uses a combination of trial division by small primes
-        and then checks divisibility by subsequent odd numbers up to the
-        square root of n. It also maintains a linked list of primes found
-        so far to speed up checks for larger numbers.
-
-        Args:
-            n: An integer to check for primality.
-
-        Returns:
-            True if n is a prime number, False otherwise.
-        """
-        if (n & 1) == 0 or (n > 5 and n % 5 == 0):
+    def isPrime(self, n):
+        """Checks if a given integer is a prime number."""
+        if n < 2:
+            return False
+        if n == 2:
+            return True
+        if n % 2 == 0:  # Even numbers > 2
+            return False
+        if n == 3:
+            return True
+        if n % 3 == 0:
+            return False
+        if n == 5:
+            return True
+        if n % 5 == 0:  # Multiples of 5 > 5
             return False
 
         maxCheck = math.sqrt(n)
@@ -116,7 +103,7 @@ class Prime():
             return False
         
         p = self.firstPrime
-        while p != None:
+        while p is not None:
             if p.n > maxCheck:
                 return True
             if n % p.n == 0:
@@ -125,7 +112,7 @@ class Prime():
 
         divisor = self.lastPrime.n + 2
         while divisor <= maxCheck:
-            if not self.isPrime(divisor):
+            if not self._isPrimeSimple(divisor):  # Avoid recursion
                 divisor += 2
                 continue
             self.lastPrime = self.lastPrime.setNext(divisor)
@@ -136,150 +123,131 @@ class Prime():
             divisor += 2
         return True
     
-    def nextPrime(self,n):
-        """Finds the next prime number greater than or equal to n.
-
-        Args:
-            n: An integer from which to start searching for the next prime.
-
-        Returns:
-            An integer representing the next prime number.
-        """
-        n += (n&1)+1
-        if self.lastPrime.n > n:
+    def _isPrimeSimple(self, n):
+        """Simple primality test without extending the prime list."""
+        if n < 2:
+            return False
+        if n == 2:
+            return True
+        if n % 2 == 0:
+            return False
+        
+        sqrt_n = math.sqrt(n)
+        p = self.firstPrime
+        while p is not None and p.n <= sqrt_n:
+            if n % p.n == 0:
+                return False
+            p = p.nextPrime
+        
+        # Check remaining odd numbers up to sqrt(n)
+        divisor = self.lastPrime.n + 2 if self.lastPrime.n < sqrt_n else int(sqrt_n) + 1
+        while divisor <= sqrt_n:
+            if n % divisor == 0:
+                return False
+            divisor += 2
+        return True
+    
+    def nextPrime(self, n):
+        """Finds the next prime number greater than n."""
+        if n < 2:
+            return 2
+        
+        # Start checking from n+1, or n+2 if n is even
+        candidate = n + 1
+        if candidate % 2 == 0:
+            candidate += 1
+        
+        # Check if we already have this prime in our list
+        if self.lastPrime.n >= candidate:
             p = self.firstPrime
-            while True:
-                if p.n >= n:
+            while p is not None:
+                if p.n > n:
                     return p.n
                 p = p.nextPrime
-        else:
-            while not self.isPrime(n):
-                n += 2
-        return n
+        
+        # Find the next prime
+        while not self.isPrime(candidate):
+            candidate += 2
+        return candidate
     
-    def getPermutations(self,symbols):
-        """Generates all unique permutations of a list of symbols.
-
-        If the number of symbols is less than 10, it generates all
-        permutations directly. Otherwise, if there are repeated symbols,
-        it groups them and generates permutations of the groups to
-        avoid memory issues.
-
-        Args:
-            symbols: A list of items (symbols) to permute.
-
-        Returns:
-            A list of tuples, where each tuple is a unique permutation
-            of the input symbols.
-        """
-        if len(symbols) < 10:
-            n = self.factorial(len(symbols))
-            if n==1:
-                return [tuple(symbols[:])]
-
-            perm = []
-            for i in range(n):
-                perm.append(self.getNthPermutation(symbols, i))
-               
-        else:
-            print("not enough memory for amount of possible permutations, creating grouped set")
-            groupedSymbols = []
-            lastSymbol = symbols[0]
-            c = 1
-            for i in range(1,len(symbols)):
-                if symbols[i]==lastSymbol:
-                    c+=1
-                else:
-                    groupedSymbols.append((lastSymbol,c))
-                    c= 1
-                    lastSymbol = symbols[i]
-            groupedSymbols.append((lastSymbol,c))
-            n = self.factorial(len(groupedSymbols))
-            if n==1:
-                return [tuple(symbols[:])]
-
-            perm = []
-            for i in range(n):
-                permutation = self.getNthPermutation(groupedSymbols, i)
-                ungrouped = []
-                for p in permutation:
-                    ungrouped+=[p[0]]*p[1]
-                perm.append(tuple(ungrouped))
-
-        return perm
+    def getPermutations(self, symbols):
+        """Generates all unique permutations with memory-conscious fallback."""
+        if len(symbols) == 0:
+            return [()]
+        
+        # Calculate actual number of unique permutations
+        symbol_counts = Counter(symbols)
+        n = len(symbols)
+        
+        # Calculate n! / (n1! * n2! * ... * nk!) for unique permutations
+        unique_count = self.factorial(n)
+        for count in symbol_counts.values():
+            unique_count //= self.factorial(count)
+        
+        # If manageable, generate all permutations
+        if unique_count <= self.max_permutations:
+            return list(set(permutations(symbols)))
+        
+        # Fallback: Group symbols and generate representative permutations
+        print(f"Not enough memory for {unique_count:,} permutations, creating grouped set")
+        return self._getGroupedPermutations(symbol_counts)
     
-    def factorial(self,n):
-        """Calculates the factorial of a non-negative integer.
-
-        Args:
-            n: A non-negative integer.
-
-        Returns:
-            The factorial of n (n!).
-        """
+    def _getGroupedPermutations(self, symbol_counts):
+        """Generate permutations by treating repeated symbols as groups."""
+        groups = list(symbol_counts.items())
+        
+        if len(groups) == 1:
+            # Only one type of symbol
+            symbol, count = groups[0]
+            return [tuple([symbol] * count)]
+        
+        # Generate permutations of the groups
+        group_perms = list(set(permutations(groups)))
+        
+        # Convert back to symbol lists
+        result = []
+        for group_perm in group_perms:
+            expanded = []
+            for symbol, count in group_perm:
+                expanded.extend([symbol] * count)
+            result.append(tuple(expanded))
+        
+        return result
+    
+    def factorial(self, n):
+        """Calculates the factorial of a non-negative integer."""
+        if n < 0:
+            return 0
         r = 1
         while n > 1:
             r *= n
-            n-=1
+            n -= 1
         return r
     
-    def getNthPermutation(self,symbols, n):
-        """Generates the nth lexicographical permutation of a list of symbols.
-
-        Args:
-            symbols: A list of items (symbols) to permute.
-            n: An integer representing the index (0-based) of the
-               desired permutation.
-
-        Returns:
-            A tuple representing the nth permutation of the symbols.
-        """
+    def getNthPermutation(self, symbols, n):
+        """Generates the nth lexicographical permutation of a list of symbols."""
         return self.permutation(symbols, self.n_to_factoradic(n))
 
-
-    def n_to_factoradic(self,n, p = 2):
-        """Converts a non-negative integer to its factoradic representation.
-
-        The factoradic representation is a sequence of digits where the
-        ith digit (from the right, 0-indexed) is less than or equal to i.
-        It's used in algorithms for generating permutations.
-
-        Args:
-            n: A non-negative integer to convert.
-            p: An integer used internally for recursion (default is 2).
-
-        Returns:
-            A list of integers representing the factoradic of n.
-        """
+    def n_to_factoradic(self, n, p=2):
+        """Converts a non-negative integer to its factoradic representation."""
         if n < p:
             return [n]
-        ret = self.n_to_factoradic((n // p) | 0, p + 1)
+        ret = self.n_to_factoradic(n // p, p + 1)
         ret.append(n % p)
         return ret
     
-    
     def permutation(self, symbols, factoradic):
-        """Generates a permutation of symbols based on its factoradic representation.
-
-        Args:
-            symbols: A list of items (symbols) to permute.
-            factoradic: A list of integers representing the factoradic
-                        of the desired permutation index.
-
-        Returns:
-            A tuple representing the permutation corresponding to the
-            given factoradic.
-        """
+        """Generates a permutation of symbols based on its factoradic representation."""
+        factoradic = factoradic[:]  # Make a copy to avoid modifying original
         factoradic.append(0)
         while len(factoradic) < len(symbols):
             factoradic = [0] + factoradic
+        
         ret = []
         s = symbols[:]
-        while len(factoradic)>0:
-            f = factoradic[0]
-            del factoradic[0]
-            ret.append(s[f])
-            del s[f]
-            
+        while len(factoradic) > 0:
+            f = factoradic.pop(0)
+            ret.append(s.pop(f))
+        
         return tuple(ret)
 
