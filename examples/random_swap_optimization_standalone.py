@@ -26,7 +26,7 @@ import colorsys
 from PIL import Image # Not strictly necessary for current savefig use, but harmless
 import io # Not strictly necessary for current savefig use, but harmless
 import rasterfairy
-import rfoptimizer
+from rasterfairy import rfoptimizer
 
 def generate_color_harmonies(n_colors, harmony_type="tetradic"):
     """
