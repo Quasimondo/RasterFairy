@@ -1,6 +1,6 @@
 #
 # Prime Number Utility v1.02
-# part of Raster Fairy v1.0,
+# part of Raster Fairy v1.1.0,
 # released 22.01.2016
 #
 # The purpose of Raster Fairy is to transform any kind of 2D point cloud into
