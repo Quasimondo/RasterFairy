@@ -1,9 +1,3 @@
-# About RasterFairy-Py3
-
-This is a fork of the official RasterFairy that has Python 3 support. Since the official repo isn't maintained (there is an unmerged pull request for Python 3 from [April, 2017](https://github.com/Quasimondo/RasterFairy/pull/8)), I made a Python 3 compatible version on my own.
-
-Below is the README from the official RasterFairy repo.
-
 # RasterFairy
 The purpose of Raster Fairy is to transform any kind of 2D point cloud into a regular raster whilst trying to preserve the neighborhood relations that were present in the original cloud. A typical use case is if you have a similarity clustering of images and want to show the images in a regular table structure.
 
