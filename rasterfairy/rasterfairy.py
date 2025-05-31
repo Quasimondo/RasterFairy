@@ -158,10 +158,11 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         else:
             if count > rasterMask['count']:
                 ones = np.nonzero(mask_flat)[0]
-                mask_flat[ones[rasterMask['count']]-count:] = 0 # Corrected index
+                mask_flat[ones[rasterMask['count']-count:]] = 0
+                #mask_flat[ones[rasterMask['count']]-count:] = 0 
             elif count < rasterMask['count']:
                 zeros = np.nonzero(1-mask_flat)[0]
-                mask_flat[zeros[0:rasterMask['count']-count]] = 1 # Corrected index
+                mask_flat[zeros[0:rasterMask['count']-count]] = 1 
 
         new_mask = mask_flat.reshape((rasterMask['height'], rasterMask['width']))
         rasterMask = {'width':rasterMask['width'],'height':rasterMask['height'],'mask':new_mask, 'count':count, 'hex': rasterMask['hex']}
@@ -171,14 +172,16 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
     while i < len(quadrants) and len(quadrants) < pointCount:
         if ( len(quadrants[i]['points']) > 1 ):
             slices = sliceQuadrant(quadrants[i], mask = rasterMask)
-            if len(slices)>1:
+            if len(slices) > 1:
                 del quadrants[i]
                 quadrants += slices
-                i = 0
+                # Don't reset i to 0, continue from current position
+                i = min(i, len(quadrants) - 1)
             else:
                 failedSlices += 1
+                i += 1
         else:
-            i+=1
+            i += 1
     if failedSlices>0:
         print("WARNING - There might be a problem with the data. Try using autoAdjustCount=True as a workaround or check if you have points with identical coordinates in your set.")
 
@@ -195,7 +198,10 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
             q['grid'][1] *= f
 
     for q in quadrants:
-        gridPoints2d[q['indices'][0]] = np.array(q['grid'][0:2],dtype=float)
+        if len(q['indices']) > 0:
+            # If quadrant has multiple points, assign the grid position to all of them
+            for idx in q['indices']:
+                gridPoints2d[idx] = np.array(q['grid'][0:2], dtype=float)
 
 
     return gridPoints2d, (width, height)
@@ -280,17 +286,21 @@ def sliceQuadrant( quadrant, mask = None ):
     else:
         
         maskSlice = mask['mask'][grid[1]:grid[1]+grid[3],grid[0]:grid[0]+grid[2]]
-        cols,rows = maskSlice.shape
-        pointCountInMask = min(cols*rows - np.sum(maskSlice),len(indices))
-        columnCounts = cols - np.sum(maskSlice, axis=0)
+        rows, cols = maskSlice.shape  # Fixed: rows is height, cols is width
+        pointCountInMask = min(rows*cols - np.sum(maskSlice),len(indices))
+        
+        if pointCountInMask <= 0:
+            return [quadrant]  # Return original if no valid points
+            
+        columnCounts = rows - np.sum(maskSlice, axis=0)  # Fixed: rows for height
         splitColumn = countX  = 0
-        while splitColumn < rows and countX < (pointCountInMask>>1):
+        while splitColumn < cols and countX < (pointCountInMask>>1):  # Fixed: cols for width
             countX += columnCounts[splitColumn]
             splitColumn+=1
         
-        rowCounts = rows-np.sum(maskSlice,axis=1)
+        rowCounts = cols - np.sum(maskSlice,axis=1)  # Fixed: cols for width
         splitRow = countY = 0
-        while splitRow < cols and countY < (pointCountInMask>>1):
+        while splitRow < rows and countY < (pointCountInMask>>1):  # Fixed: rows for height
             countY += rowCounts[splitRow]
             splitRow+=1
         
@@ -303,7 +313,9 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceObject['indices'] = indices[newOrder]
             sliceObject['grid'] = [grid[0], grid[1], splitColumn, grid[3]]
             cropGrid(mask['mask'],sliceObject['grid'])
-            slicesX.append(sliceObject)    
+            # Validate grid after cropping
+            if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
+                slicesX.append(sliceObject)    
 
         if countX < len(order):
             sliceObject = {} 
@@ -312,7 +324,9 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceObject['indices'] = indices[newOrder]
             sliceObject['grid'] = [grid[0]+splitColumn, grid[1], grid[2]-splitColumn, grid[3]]
             cropGrid(mask['mask'],sliceObject['grid'])
-            slicesX.append(sliceObject)   
+            # Validate grid after cropping
+            if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
+                slicesX.append(sliceObject)   
         
         order = np.lexsort((xy[:,0].astype(int),xy[:,1].astype(int)))
         slicesY = []
@@ -321,9 +335,11 @@ def sliceQuadrant( quadrant, mask = None ):
             newOrder = order[:countY]
             sliceObject['points'] = xy[newOrder]
             sliceObject['indices'] = indices[newOrder]
-            sliceObject['grid'] = [grid[0], grid[1], grid[2],splitRow]
+            sliceObject['grid'] = [grid[0], grid[1], grid[2], splitRow]
             cropGrid(mask['mask'],sliceObject['grid'])
-            slicesY.append(sliceObject)  
+            # Validate grid after cropping
+            if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
+                slicesY.append(sliceObject)  
 
         if countY < len(order):
             sliceObject = {} 
@@ -332,28 +348,34 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceObject['indices'] = indices[newOrder]
             sliceObject['grid'] = [grid[0], grid[1]+splitRow, grid[2], grid[3]-splitRow]
             cropGrid(mask['mask'],sliceObject['grid'])
-            slicesY.append(sliceObject)   
+            # Validate grid after cropping
+            if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
+                slicesY.append(sliceObject)   
         
-        if len(slicesX)==1:
-            slices = slicesY
-        elif len(slicesY)==1:
-            slices = slicesX
+        # Safe ratio calculation to avoid division by zero
+        def safe_ratio(grid_info):
+            width = max(grid_info['grid'][2], 1)
+            height = max(grid_info['grid'][3], 1)
+            ratio = min(width, height) / max(width, height)
+            return ratio if ratio > 0 else 0.01
+        
+        if len(slicesX) == 0 and len(slicesY) == 0:
+            # No valid slices found, return original
+            slices = [quadrant]
+        elif len(slicesX) <= 1:
+            slices = slicesY if len(slicesY) > 0 else [quadrant]
+        elif len(slicesY) <= 1:
+            slices = slicesX if len(slicesX) > 0 else [quadrant]
         else:
-            prop1 = float(slicesX[0]['grid'][2]) / float(slicesX[0]['grid'][3])
-            prop2 = float(slicesX[1]['grid'][2]) / float(slicesX[1]['grid'][3])
-            if prop1 > 1.0:
-                prop1 = 1.0 / prop1
-            if prop2 > 1.0:
-                prop2 = 1.0 / prop2 
-            ratioX = max(abs(1.0 - prop1),abs(1.0 - prop2))
+            # Compare aspect ratios to choose best slicing direction
+            ratio1 = safe_ratio(slicesX[0])
+            ratio2 = safe_ratio(slicesX[1]) if len(slicesX) > 1 else ratio1
+            ratioX = max(abs(1.0 - ratio1), abs(1.0 - ratio2))
             
-            prop1 = float(slicesY[0]['grid'][2]) / float(slicesY[0]['grid'][3])
-            prop2 = float(slicesY[1]['grid'][2]) / float(slicesY[1]['grid'][3])
-            if prop1 > 1.0:
-                prop1 = 1.0 / prop1
-            if prop2 > 1.0:
-                prop2 = 1.0 / prop2 
-            ratioY = max(abs(1.0 - prop1),abs(1.0 - prop2))
+            ratio1 = safe_ratio(slicesY[0])
+            ratio2 = safe_ratio(slicesY[1]) if len(slicesY) > 1 else ratio1
+            ratioY = max(abs(1.0 - ratio1), abs(1.0 - ratio2))
+            
             if ratioX < ratioY:
                 slices = slicesX
             else:
@@ -377,31 +399,57 @@ def cropGrid(mask,grid):
     Returns:
         None. The `grid` list is modified directly.
     """
+    # Validate grid bounds
+    if grid[2] <= 0 or grid[3] <= 0:
+        return
+    
+    # Ensure grid is within mask bounds
+    grid[0] = max(0, min(grid[0], mask.shape[1] - 1))
+    grid[1] = max(0, min(grid[1], mask.shape[0] - 1))
+    grid[2] = max(1, min(grid[2], mask.shape[1] - grid[0]))
+    grid[3] = max(1, min(grid[3], mask.shape[0] - grid[1]))
+    
     maskSlice = mask[grid[1]:grid[1]+grid[3],grid[0]:grid[0]+grid[2]]
-    cols,rows = maskSlice.shape
-    columnCounts = cols - np.sum(maskSlice, axis=0)
+    rows, cols = maskSlice.shape  # rows = height, cols = width
+    
+    if rows == 0 or cols == 0:
+        return
+    
+    columnCounts = rows - np.sum(maskSlice, axis=0)  # Fixed: rows for height
     for i in range(len(columnCounts)):
         if columnCounts[i]>0:
             break
         grid[0]+=1
         grid[2]-=1
+        if grid[2] <= 0:
+            grid[2] = 1
+            break
     
     for i in range(len(columnCounts)-1,-1,-1):
         if columnCounts[i]>0:
             break
         grid[2]-=1
+        if grid[2] <= 0:
+            grid[2] = 1
+            break
     
-    rowCounts = rows-np.sum(maskSlice,axis=1)
+    rowCounts = cols - np.sum(maskSlice,axis=1)  # Fixed: cols for width
     for i in range(len(rowCounts)):
         if rowCounts[i]>0:
             break
         grid[1]+=1
         grid[3]-=1
+        if grid[3] <= 0:
+            grid[3] = 1
+            break
     
     for i in range(len(rowCounts)-1,-1,-1):
         if rowCounts[i]>0:
             break
         grid[3]-=1
+        if grid[3] <= 0:
+            grid[3] = 1
+            break
     
 
 def getRasterMaskFromImage( img ):
