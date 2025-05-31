@@ -53,39 +53,28 @@ from scipy.optimize import linear_sum_assignment
 import math
 
 
-def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, 
-                           proportionThreshold = 0.4, hungarian_threshold=200):
+def transformPointCloud2D(points2d, target=None, autoAdjustCount=True, 
+                         proportionThreshold=0.4, hungarian_threshold=200,
+                         emptyStrategy='random'):
     """Transforms a 2D point cloud to a regular raster grid.
 
-    This is the main function of the Raster Fairy algorithm. It takes a list of
-    2D points and maps them to a target grid, which can be a rectangle,
-    a PIL image (acting as a mask), or a pre-defined raster mask dictionary.
-
     Args:
-        points2d: A NumPy array of shape (N, 2) representing the input
-            point cloud.
-        target: The target grid. Can be:
-            - None: Automatically determines a rectangular grid.
-            - tuple (width, height): Defines a rectangular grid.
-            - PIL.Image.Image: An image used as a mask. Black pixels are
-              grid cells, white pixels are empty.
-            - dict: A raster mask dictionary with keys 'width', 'height',
-              'mask' (NumPy array), 'count', and 'hex' (boolean).
-        autoAdjustCount: Boolean. If True, and the target is a raster mask,
-            the mask will be adjusted (by flipping 0s to 1s or vice versa)
-            to match the number of points in points2d if they differ.
-        proportionThreshold: Float. When target is None, if the best
-            rectangular arrangement has an aspect ratio below this threshold,
-            an incomplete square grid is used instead.
+        points2d: A NumPy array of shape (N, 2) representing the input point cloud.
+        target: The target grid (None, tuple, PIL image, or dict).
+        autoAdjustCount: Boolean. If True, adjusts mask to match point count.
+        proportionThreshold: Float. Aspect ratio threshold for rectangular grids.
+        hungarian_threshold: Maximum points in sub-quadrant for applying Hungarian algorithm.
+        emptyStrategy: String. Strategy for which cells to leave empty when
+            there are more grid cells than points. Options:
+            - 'random': Randomly distribute empty cells (default)
+            - 'center': Keep center filled, empty outer cells
+            - 'outer': Keep outer filled, empty center cells  
+            - 'bottom': Empty cells from bottom rows
+            - 'top': Empty cells from top rows
+            - 'edges': Empty cells from the edges inward
 
     Returns:
-        A tuple (gridPoints2d, (width, height)):
-            - gridPoints2d: A NumPy array of shape (N, 2) representing the
-              transformed grid points.
-            - (width, height): A tuple representing the dimensions of the
-              target grid.
-        Returns False if the target grid is too small or has insufficient
-        grid points.
+        A tuple (gridPoints2d, (width, height)) or False if target too small.
     """
     
     if points2d is None or len(points2d) == 0:
@@ -144,30 +133,85 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True,
         print("ERROR: raster mask target does not have enough grid points to hold data")
         return False
 
-    if not (rasterMask is None) and (rasterMask['count']!=len(points2d)):
-        mask_flat = rasterMask['mask'].flatten() # Use a different variable name
+    if not (rasterMask is None) and (rasterMask['count'] != len(points2d)):
+        mask_flat = rasterMask['mask'].flatten()
         count = len(points2d)
+        
         if autoAdjustCount is True:
-
             if count > rasterMask['count']:
                 ones = np.nonzero(mask_flat)[0]
                 np.random.shuffle(ones)
                 mask_flat[ones[0:count-rasterMask['count']]] = 0
             elif count < rasterMask['count']:
                 zeros = np.nonzero(1-mask_flat)[0]
-                np.random.shuffle(zeros)
-                mask_flat[zeros[0:rasterMask['count']-count]] = 1
-        else:
-            if count > rasterMask['count']:
-                ones = np.nonzero(mask_flat)[0]
-                mask_flat[ones[rasterMask['count']-count:]] = 0
-                #mask_flat[ones[rasterMask['count']]-count:] = 0 
-            elif count < rasterMask['count']:
-                zeros = np.nonzero(1-mask_flat)[0]
-                mask_flat[zeros[0:rasterMask['count']-count]] = 1 
+                cells_to_mask = rasterMask['count'] - count
+                
+                # Apply empty strategy
+                if emptyStrategy == 'random':
+                    np.random.shuffle(zeros)
+                    mask_flat[zeros[0:cells_to_mask]] = 1
+                elif emptyStrategy == 'center':
+                    # Mask cells closest to center
+                    center_y, center_x = rasterMask['height'] / 2, rasterMask['width'] / 2
+                    distances = []
+                    for idx in zeros:
+                        y, x = divmod(idx, rasterMask['width'])
+                        dist = (x - center_x)**2 + (y - center_y)**2
+                        distances.append((dist, idx))
+                    distances.sort()  # Closest to center first
+                    for i in range(cells_to_mask):
+                        mask_flat[distances[i][1]] = 1
+                elif emptyStrategy == 'outer':
+                    # Mask cells farthest from center
+                    center_y, center_x = rasterMask['height'] / 2, rasterMask['width'] / 2
+                    distances = []
+                    for idx in zeros:
+                        y, x = divmod(idx, rasterMask['width'])
+                        dist = (x - center_x)**2 + (y - center_y)**2
+                        distances.append((dist, idx))
+                    distances.sort(reverse=True)  # Farthest from center first
+                    for i in range(cells_to_mask):
+                        mask_flat[distances[i][1]] = 1
+                elif emptyStrategy == 'bottom':
+                    # Mask cells from bottom rows first
+                    rows_to_mask = []
+                    for idx in zeros:
+                        y, x = divmod(idx, rasterMask['width'])
+                        rows_to_mask.append((y, idx))  # Sort by row (y coordinate)
+                    rows_to_mask.sort(reverse=True)  # Bottom rows first
+                    for i in range(cells_to_mask):
+                        mask_flat[rows_to_mask[i][1]] = 1
+                elif emptyStrategy == 'top':
+                    # Mask cells from top rows first
+                    rows_to_mask = []
+                    for idx in zeros:
+                        y, x = divmod(idx, rasterMask['width'])
+                        rows_to_mask.append((y, idx))
+                    rows_to_mask.sort()  # Top rows first
+                    for i in range(cells_to_mask):
+                        mask_flat[rows_to_mask[i][1]] = 1
+                elif emptyStrategy == 'edges':
+                    # Mask cells from edges inward
+                    edge_distances = []
+                    for idx in zeros:
+                        y, x = divmod(idx, rasterMask['width'])
+                        # Distance to nearest edge
+                        dist_to_edge = min(x, rasterMask['width']-1-x, y, rasterMask['height']-1-y)
+                        edge_distances.append((dist_to_edge, idx))
+                    edge_distances.sort()  # Closest to edge first
+                    for i in range(cells_to_mask):
+                        mask_flat[edge_distances[i][1]] = 1
+                else:
+                    # Default to random if unknown strategy
+                    np.random.shuffle(zeros)
+                    mask_flat[zeros[0:cells_to_mask]] = 1
 
-        new_mask = mask_flat.reshape((rasterMask['height'], rasterMask['width']))
-        rasterMask = {'width':rasterMask['width'],'height':rasterMask['height'],'mask':new_mask, 'count':count, 'hex': rasterMask['hex']}
+            new_mask = mask_flat.reshape((rasterMask['height'], rasterMask['width']))
+            rasterMask = {'width': rasterMask['width'], 'height': rasterMask['height'], 
+                         'mask': new_mask, 'count': count, 'hex': rasterMask['hex']}
+            
+            
+        
     quadrants = [{'points':points2d, 'grid':[0,0,width,height], 'indices':np.arange(pointCount)}]
     i = 0
     failedSlices = 0
@@ -892,32 +936,38 @@ def getTriangularArrangement(n):
     return [{'hex':False,'rows':arrangement_list,'type':'triangular'}]
 
 
-def getArrangements(n, includeHexagonalArrangements = True,includeRectangularArrangements = True):
+def getArrangements(n, includeHexagonalArrangements=True, includeRectangularArrangements=True):
     """Gets a list of possible arrangements for n items.
-
+    
     This function combines results from various arrangement generation
     functions (rectangular, hexagonal, symmetric, triangular, circular).
-
+    
     Args:
         n: The total number of items to arrange.
         includeHexagonalArrangements: Boolean, whether to include hexagonal types.
         includeRectangularArrangements: Boolean, whether to include rectangular types.
-
+        
     Returns:
         A list of arrangement dictionaries.
     """
-    res = [] # Use a different variable name
+    res = []
     if includeHexagonalArrangements:
         res += getShiftedAlternatingRectArrangements(n)
         res += getShiftedSymmetricArrangements(n)
         res += getShiftedTriangularArrangement(n)
+        
+        # Add shifted circular arrangement
+        bestr, bestrp, bestc = getBestShiftedCircularMatch(n)
+        if bestc == n:
+            res.append(getShiftedCircularArrangement(bestr, bestrp))
+            
     if includeRectangularArrangements:
         res += getAlternatingRectArrangements(n)
         res += getSymmetricArrangements(n)
         res += getTriangularArrangement(n)
-        bestr,bestrp,bestc = getBestCircularMatch(n)
+        bestr, bestrp, bestc = getBestCircularMatch(n)
         if bestc == n:
-            res.append(getCircularArrangement(bestr,bestrp))
+            res.append(getCircularArrangement(bestr, bestrp))
     return res
 
 def arrangementListToRasterMasks( arrangements ):
@@ -1062,6 +1112,126 @@ def getCircularArrangement(radius,adjustFactor=0.0):
                 rows_list[radius+y_coord]+=1
 
     return {'hex':False,'rows':rows_list,'type':'circular'}
+    
+    
+def getBestShiftedCircularMatch(n):
+    """Finds the best shifted circular (hexagonal packing) arrangement parameters for n items.
+    
+    In hexagonal packing, circles are arranged in a honeycomb pattern with each row
+    shifted by half a cell width and rows spaced by sqrt(3)/2 times the cell width.
+    
+    Args:
+        n: The target number of items.
+        
+    Returns:
+        A tuple (best_radius, best_radius_adjust_factor, best_count):
+            - best_r: Optimal integer radius.
+            - best_rp: Optimal radius adjustment factor (0.0 to 0.9).
+            - best_c: The number of points in the best circle found.
+    """
+    bestc = n * 2
+    bestr = 0
+    bestrp = 0.0
+    
+    # Estimate minimum radius based on hexagonal packing density
+    # In hexagonal packing, each point occupies √3/2 ≈ 0.866 area units
+    hex_density = math.sqrt(3) / 2
+    estimated_radius = math.sqrt(n * hex_density / math.pi)
+    minr = max(1, int(estimated_radius) - 3)  # Start a bit lower
+    maxr = int(estimated_radius) + 5  # Check a wider range
+    
+    print(f"Estimated radius for {n} points: {estimated_radius:.2f}, checking range {minr}-{maxr}")
+    
+    for rp in range(10):
+        rpf = rp / 10.0
+        for r in range(minr, maxr + 1):
+            if r == 0:
+                continue
+            
+            radius_squared = (r + rpf) * (r + rpf)
+            c = 0
+            
+            # Vertical spacing between rows in hexagonal packing
+            row_spacing = math.sqrt(3) / 2
+            
+            # Calculate which rows fit within the circle
+            max_row_index = int(math.sqrt(radius_squared) / row_spacing) + 1
+            
+            for row_index in range(-max_row_index, max_row_index + 1):
+                y = row_index * row_spacing
+                if y * y >= radius_squared:
+                    continue
+                
+                # Maximum x coordinate for this row such that x² + y² ≤ radius²
+                x_max = math.sqrt(radius_squared - y * y)
+                
+                if row_index % 2 == 0:  # Even rows: positions at integers (..., -1, 0, 1, ...)
+                    count_in_row = 2 * int(x_max) + 1
+                else:  # Odd rows: positions at half-integers (..., -0.5, 0.5, 1.5, ...)
+                    count_in_row = 2 * max(0, int(x_max + 0.5))
+                
+                c += count_in_row
+            
+            print(f"  Radius {r} + {rpf}: {c} points")
+            
+            if c == n:
+                return r, rpf, c
+            
+            if c > n and c < bestc:
+                bestrp = rpf
+                bestr = r
+                bestc = c
+    
+    return bestr, bestrp, bestc
+
+
+def getShiftedCircularArrangement(radius, adjustFactor=0.0):
+    """Creates an arrangement dictionary for a shifted circular (hexagonal packing) layout.
+    
+    Args:
+        radius: Integer, the main radius of the circle.
+        adjustFactor: Float, a factor to fine-tune the circle's boundary.
+        
+    Returns:
+        An arrangement dictionary with keys:
+            - 'hex': True (indicates hexagonal packing).
+            - 'rows': A list of integers representing row lengths for the circle.
+            - 'type': 'shifted_circular'.
+    """
+    radius_squared = (radius + adjustFactor) * (radius + adjustFactor)
+    
+    # Vertical spacing between rows in hexagonal packing
+    row_spacing = math.sqrt(3) / 2
+    
+    # Calculate which rows fit within the circle
+    max_row_index = int(math.sqrt(radius_squared) / row_spacing) + 1
+    
+    # Create array to store row lengths, indexed from top to bottom
+    rows_data = []
+    
+    for row_index in range(-max_row_index, max_row_index + 1):
+        y = row_index * row_spacing
+        if y * y >= radius_squared:
+            rows_data.append(0)  # Empty row
+            continue
+        
+        # Maximum x coordinate for this row
+        x_max = math.sqrt(radius_squared - y * y)
+        
+        if row_index % 2 == 0:  # Even rows: positions at integers
+            count_in_row = 2 * int(x_max) + 1
+        else:  # Odd rows: positions at half-integers
+            count_in_row = 2 * max(0, int(x_max + 0.5))
+        
+        rows_data.append(max(0, count_in_row))
+    
+    # Remove leading and trailing empty rows
+    while rows_data and rows_data[0] == 0:
+        rows_data.pop(0)
+    while rows_data and rows_data[-1] == 0:
+        rows_data.pop()
+    
+    return {'hex': True, 'rows': rows_data, 'type': 'shifted_circular'}    
 
 def arrangement_sort(item1, item2):
     """Comparison function for sorting raster mask arrangements based on aspect ratio.
