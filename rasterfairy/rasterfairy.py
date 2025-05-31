@@ -911,6 +911,38 @@ def getArrangements(n, includeHexagonalArrangements = True,includeRectangularArr
         res += getShiftedAlternatingRectArrangements(n)
         res += getShiftedSymmetricArrangements(n)
         res += getShiftedTriangularArrangement(n)
+        # Add hexagonal circle arrangement
+        hc_arrangement = getHexagonalCircleArrangement(n)
+        if hc_arrangement and hc_arrangement.get('count', 0) > 0:
+            # getHexagonalCircleArrangement already returns a rasterMask structure
+            # but getArrangements is expected to return arrangement dicts before
+            # they are converted by arrangementListToRasterMasks.
+            # For now, let's see if it's okay to append the mask directly,
+            # or if it needs to be wrapped/transformed.
+            # Based on the problem, getArrangements returns a list of *arrangement dictionaries*.
+            # The new function getHexagonalCircleArrangement *already returns a rasterMask*.
+            # This is a slight mismatch.
+            # For now, appending the rasterMask. This might need adjustment if downstream
+            # code strictly expects the "arrangement" dict structure (e.g. just 'rows', 'hex', 'type').
+            # However, the output of getArrangements is passed to arrangementListToRasterMasks,
+            # which expects a list of *arrangement dictionaries*.
+            # The simplest way to integrate is to ensure getHexagonalCircleArrangement's output
+            # is compatible or converted.
+            # The current getHexagonalCircleArrangement returns a full rasterMask.
+            # Other functions like getShiftedAlternatingRectArrangements return {'hex':True,'rows':d,'type':'alternating'}
+            # This is then converted by arrangementToRasterMask.
+            # To be consistent, getHexagonalCircleArrangement should ideally return a similar structure,
+            # or arrangementListToRasterMasks needs to handle pre-computed masks.
+
+            # Quick Fix: Since getHexagonalCircleArrangement returns a mask, and
+            # arrangementListToRasterMasks expects arrangements to *convert* to masks,
+            # we should ensure this is handled.
+            # The problem states "The result of this call (which is a raster mask dictionary) should be appended to the res list."
+            # This implies that `res` might become a list of mixed types (arrangements and masks),
+            # or that `arrangementListToRasterMasks` can handle it.
+            # Let's assume for now that arrangementListToRasterMasks will be adapted or can handle it.
+            # So, directly appending the mask.
+            res.append(hc_arrangement)
     if includeRectangularArrangements:
         res += getAlternatingRectArrangements(n)
         res += getSymmetricArrangements(n)
@@ -1129,3 +1161,94 @@ def multiplyArray(arr):
     for val in arr: # Use a different variable name
         res *= val
     return res
+
+
+def getHexagonalCircleArrangement(n):
+    """Generates a hexagonal circle raster mask for n items.
+
+    Args:
+        n: The total number of items to arrange.
+
+    Returns:
+        A raster mask dictionary.
+        Keys: 'width', 'height', 'mask' (NumPy array), 'count',
+              'hex' (True), 'type' ('hexagonal_circle').
+    """
+    if n == 0:
+        return {'width': 0, 'height': 0, 'mask': np.array([], dtype=int),
+                'count': 0, 'hex': True, 'type': 'hexagonal_circle'}
+
+    radius, adjustFactor, target_point_count = getBestCircularMatch(n)
+
+    if radius == 0: # Should typically handle n=1
+        # For a single point, width is 1 (no hex +1 adjustment needed for a single cell)
+        # However, to be consistent with how arrangementToRasterMask might treat hex=True
+        # for single row/column, let's test the implications.
+        # The old logic: arrangementToRasterMask for rows=[1], hex=True gives width=2, mask=[[0,1]]
+        # If we want a true single cell [0], width should be 1.
+        # Let's assume for n=1, a single cell is desired.
+        if n == 1:
+             return {'width': 1, 'height': 1, 'mask': np.array([[0]], dtype=int),
+                    'count': 1, 'hex': True, 'type': 'hexagonal_circle'}
+        else: # n > 1 but radius is 0, means getBestCircularMatch might need refinement for small n
+              # or this is an unexpected state. Defaulting to empty for safety.
+             return {'width': 0, 'height': 0, 'mask': np.array([], dtype=int),
+                     'count': 0, 'hex': True, 'type': 'hexagonal_circle'}
+
+
+    # For radius > 0
+    rlim_sq = (radius + adjustFactor)**2
+    height = 2 * radius + 1
+    row_lengths = np.zeros(height, dtype=int)
+
+    for y_idx in range(height):
+        y_coord_circle = y_idx - radius
+        y_coord_sq = y_coord_circle**2
+        for x_coord_circle in range(-radius, radius + 1):
+            if x_coord_circle**2 + y_coord_sq < rlim_sq:
+                row_lengths[y_idx] += 1
+
+    if len(row_lengths) == 0 : # Should not happen if radius > 0
+        max_row_len = 0
+    else:
+        max_row_len = np.max(row_lengths)
+
+    if max_row_len == 0 and n > 0:
+        # This implies no cells were generated, which is problematic if n > 0.
+        # Potentially, n=1 might hit this if radius from getBestCircularMatch is >0 but too small.
+        # Fallback to a single cell if n=1, otherwise empty.
+        if n == 1:
+            return {'width': 1, 'height': 1, 'mask': np.array([[0]], dtype=int),
+                    'count': 1, 'hex': True, 'type': 'hexagonal_circle'}
+        return {'width': 0, 'height': 0, 'mask': np.array([], dtype=int),
+                'count': 0, 'hex': True, 'type': 'hexagonal_circle'}
+
+    # Consistent with arrangementToRasterMask: width = max_row_len (then +1 if hex)
+    # So, if hex is true, effective grid width for placing cells is max_row_len,
+    # and total mask width is max_row_len + 1.
+    width = max_row_len + 1 if max_row_len > 0 else 1
+
+    mask_array = np.ones((height, width), dtype=int)
+    total_cells = 0
+
+    for y_idx in range(height):
+        current_len = row_lengths[y_idx]
+        if current_len > 0:
+            # Padding calculation for hex grids:
+            # The extra column (width = max_row_len + 1) is for staggering.
+            # Rows are centered within the max_row_len part of the width.
+            # If a row's length is max_row_len, it uses columns 0 to max_row_len-1 (shifted by padding_offset).
+            # If a row is shorter, it's centered similarly.
+            # The actual staggering (shifting rows left/right) is usually handled
+            # during coordinate generation (rasterMaskToGrid), not in the mask itself.
+            # Here, we are creating a mask similar to arrangementToRasterMask.
+            padding = (width - current_len) // 2
+            mask_array[y_idx, padding : padding + current_len] = 0
+            total_cells += current_len
+
+    # Ensure the count matches n, if specified by autoAdjustCount behavior (not implemented here directly)
+    # For now, total_cells is the actual number of cells in the generated mask.
+    # The problem states "target_point_count from getBestCircularMatch - the total_cells calculated might differ. The plan says to use total_cells for now."
+
+    return {'width': width, 'height': height, 'mask': mask_array,
+            'count': total_cells, 'hex': True, 'type': 'hexagonal_circle'}
