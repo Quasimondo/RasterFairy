@@ -2,7 +2,8 @@
 #
 # This script demonstrates the basic functionality of the RasterFairy library
 # by transforming a 2D point cloud (generated via t-SNE from random 3D data)
-# into a regular rectangular grid.
+# into various regular grid arrangements including rectangular, circular, 
+# triangular, and shifted circular (hexagonal packing).
 #
 # Dependencies:
 # - matplotlib
@@ -16,10 +17,8 @@
 #   python demo1_standalone.py
 #
 # Output:
-# The script will generate and save two PNG images in the current directory:
-# - tsne_embedding.png: The initial scatter plot of the t-SNE embedded data.
-# - rasterfairy_grid.png: The scatter plot of the data after RasterFairy
-#                         has arranged it into a rectangular grid.
+# The script will generate and save PNG images in the current directory showing
+# different grid arrangements.
 #
 
 import matplotlib.pyplot as plt
@@ -38,6 +37,7 @@ def generate_data():
     totalDataPoints = 4900
     dataPoints = generate_color_harmonies(totalDataPoints, "tetradic")
     # create a t-sne embedding in 2D
+    print(f"Preparing TSNE for {totalDataPoints} data points") 
     xy = TSNE().fit_transform(dataPoints)
     return dataPoints, xy, totalDataPoints
 
@@ -106,9 +106,9 @@ def get_rectangular_arrangement(num_points):
     # The first arrangement is the most square
     return arrangements[0]
     
-def transform_to_grid(xy_coords, arrangement):
+def transform_to_grid(xy_coords, arrangement, emptyStrategy="random"):
     """Transforms 2D point cloud to a grid arrangement."""
-    grid_xy, (width, height) = rasterfairy.transformPointCloud2D(xy_coords, target=arrangement)
+    grid_xy, (width, height) = rasterfairy.transformPointCloud2D(xy_coords, target=arrangement,emptyStrategy=emptyStrategy)
     return grid_xy, width, height
 
 # Placeholder for where this function will be called
@@ -140,7 +140,7 @@ def main_block():
     print(f"Shape of grid_xy: {grid_xy.shape}")
 
     # 5. Grid Scatter Plot
-    display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Grid ({grid_width}x{grid_height})", filename="rasterfairy_grid.png", marker_size=9)
+    display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Rectangular Grid ({grid_width}x{grid_height})", filename="rasterfairy_grid.png", marker_size=9)
 
 
     # 6. Get Circular Arrangement
@@ -155,38 +155,63 @@ def main_block():
         return # Exit if no arrangement found
 
     # 7. Transform Point Cloud to Grid
-    grid_xy, grid_width, grid_height = transform_to_grid(xy, target_arrangement)
-    print(f"Point cloud transformed to a {grid_width}x{grid_height} grid.")
+    grid_xy, grid_width, grid_height = transform_to_grid(xy, target_arrangement, emptyStrategy="center")
+    print(f"Point cloud transformed to a {grid_width}x{grid_height} circular grid.")
     print(f"Shape of grid_xy: {grid_xy.shape}")
 
     # 8. Grid Scatter Plot
-    display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Grid ({grid_width}x{grid_height})", filename="rasterfairy_circular_grid.png", marker_size=9)
+    display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Circular Grid ({grid_width}x{grid_height})", filename="rasterfairy_circular_grid.png", marker_size=9)
 
 
     # 9. Get Triangular Arrangement
     try:
         #Note that this returns a list even though it is always a single item:
-        triangular_arrangement = rasterfairy.getTriangularArrangement(totalDataPoints)[0]
-        print(f"Triangular arrangement {triangular_arrangement}")
-        target_arrangement = rasterfairy.arrangementToRasterMask(triangular_arrangement)
-        print(f"Target arrangement {target_arrangement}")
-    except ValueError as e:
-        print(f"Error: {e}")
-        return # Exit if no arrangement found
+        triangular_arrangements = rasterfairy.getTriangularArrangement(totalDataPoints)
+        if not triangular_arrangements:
+            print("No triangular arrangement found - skipping triangular demo")
+        else:
+            triangular_arrangement = triangular_arrangements[0]
+            print(f"Triangular arrangement {triangular_arrangement}")
+            target_arrangement = rasterfairy.arrangementToRasterMask(triangular_arrangement)
+            print(f"Target arrangement {target_arrangement}")
 
-    # 10. Transform Point Cloud to Grid
-    grid_xy, grid_width, grid_height = transform_to_grid(xy, target_arrangement)
-    print(f"Point cloud transformed to a {grid_width}x{grid_height} grid.")
-    print(f"Shape of grid_xy: {grid_xy.shape}")
+            # 10. Transform Point Cloud to Grid
+            grid_xy, grid_width, grid_height = transform_to_grid(xy, target_arrangement)
+            print(f"Point cloud transformed to a {grid_width}x{grid_height} triangular grid.")
+            print(f"Shape of grid_xy: {grid_xy.shape}")
 
-    # 11. Grid Scatter Plot
-    display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Grid ({grid_width}x{grid_height})", filename="rasterfairy_triangular_grid.png", marker_size=9)
+            # 11. Grid Scatter Plot
+            display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Triangular Grid ({grid_width}x{grid_height})", filename="rasterfairy_triangular_grid.png", marker_size=9)
+    except (ValueError, AttributeError) as e:
+        print(f"Triangular arrangement error: {e}")
 
 
+    # 12. Get Shifted Circular Arrangement (Hexagonal Packing)
+    try:
+        bestr, bestrp, bestc = rasterfairy.getBestShiftedCircularMatch(totalDataPoints)
+        print(f"Best shifted circular match: radius={bestr}, adjust={bestrp}, count={bestc}")
+        
+        #if bestc == totalDataPoints:
+        shifted_circular_arrangement = rasterfairy.getShiftedCircularArrangement(bestr, bestrp)
+        print(f"Shifted circular arrangement: {shifted_circular_arrangement}")
+        target_arrangement = rasterfairy.arrangementToRasterMask(shifted_circular_arrangement)
+        print(f"Target arrangement: {target_arrangement}")
+
+        # 13. Transform Point Cloud to Shifted Circular Grid
+        grid_xy, grid_width, grid_height = transform_to_grid(xy, target_arrangement, emptyStrategy="outer")
+        print(f"Point cloud transformed to a {grid_width}x{grid_height} shifted circular grid (hexagonal packing).")
+        print(f"Shape of grid_xy: {grid_xy.shape}")
+
+        # 14. Shifted Circular Grid Scatter Plot
+        display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Shifted Circular Grid ({grid_width}x{grid_height})", filename="rasterfairy_shifted_circular_grid.png", marker_size=9)
+        #else:
+        #    print(f"No exact shifted circular arrangement found for {totalDataPoints} points (closest: {bestc})")
+    except (ValueError, AttributeError) as e:
+        print(f"Shifted circular arrangement error: {e}")
 
 
     print("...RasterFairy standalone demo 1 finished.")
-    print("Output images: tsne_embedding.png, rasterfairy_grid.png, rasterfairy_circular_grid.png, rasterfairy_triangular_grid.png")
+    print("Output images: tsne_embedding.png, rasterfairy_grid.png, rasterfairy_circular_grid.png, rasterfairy_triangular_grid.png, rasterfairy_shifted_circular_grid.png")
 
 if __name__ == "__main__":
     main_block()
