@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 #
 # Raster Fairy v1.0.3,
 # released 22.01.2016
@@ -43,7 +40,7 @@ from __future__ import print_function
 
 import numpy as np
 import rasterfairy.prime as prime
-from rasterfairy.utils import cmp_to_key
+from functools import cmp_to_key
 import math
 
 
@@ -56,24 +53,24 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         if float(target[0]) / float(target[1])<proportionThreshold:
             width = int(math.sqrt(pointCount))
             height = int(math.ceil(float(pointCount)/float(width)))
-            print("no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height)
+            print(("no good rectangle found for",pointCount,"points, using incomplete square",width,"*",height))
             target = {'width':width,'height':height,'mask':np.zeros((height,width),dtype=int), 'count':width*height, 'hex': False}
         
     if type(target) is tuple and len(target)==2:
-        #print "using rectangle target"
+        #print("using rectangle target")
         if target[0] * target[1] < pointCount:
-            print("ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs ",pointCount," data points")
+            print(("ERROR: target rectangle is too small to hold data: Rect is",target[0],"*",target[1],"=",target[0] * target[1]," vs ",pointCount," data points"))
             return False
         width = target[0]
         height = target[1]
         
     elif "PIL." in str(type(target)):
-        #print "using bitmap image target"
+        #print("using bitmap image target")
         rasterMask = getRasterMaskFromImage(target)
         width = rasterMask['width']
         height = rasterMask['height']
     elif 'mask' in target and 'count' in target and 'width' in target and 'height' in target:
-        #print "using raster mask target"
+        #print("using raster mask target")
         rasterMask = target
         width = rasterMask['width']
         height = rasterMask['height']
@@ -619,4 +616,3 @@ def multiplyArray(a):
     for v in a: 
         f *= v
     return f
-

@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 #
 # Prime Number Utility v1.02
 # part of Raster Fairy v1.0,
@@ -64,7 +61,7 @@ class Prime():
         while n > 1:
             if n % factor == 0:
                 result.append(factor)
-                n /= factor
+                n //= factor
             else:
                 factor = self.nextPrime(factor)
                 

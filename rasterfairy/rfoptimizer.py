@@ -1,6 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 #
 # Random Grid Swap Utility v1.0
 # part of Raster Fairy v1.02,
@@ -98,7 +95,7 @@ class SwapOptimizer:
                 cy = int(0.5+self.grid_norm[j][1]*(height-1))
 
                 if (cx,cy) in ci:
-                    print("ERROR:",(cx,cy)," doubled")
+                    print(("ERROR:",(cx,cy)," doubled"))
                 cells[cx][cy] = j
                 ci[(cx,cy) ] = True
 
@@ -126,11 +123,11 @@ class SwapOptimizer:
 
         bestQuality = startingQuality = self.sumDistances(swapTable,distances)
         startingSwapTable = swapTable.copy()
-        print("Starting sum of distances",startingQuality)
+        print(("Starting sum of distances",startingQuality))
         if shakeIterations > 0:
             self.shake(cells,swapTable,shakeIterations,1,width,height)
             bestQuality = self.sumDistances(swapTable,distances)
-            print("After shake sum of distances",bestQuality)
+            print(("After shake sum of distances",bestQuality))
 
         bestSwapTableBeforeAnnealing = swapTable.copy()
         toleranceSteps = 0
@@ -138,9 +135,9 @@ class SwapOptimizer:
         for i in range(iterations):
             if i>0 and i % 20000 == 0:
                 clear_output(wait=True)
-                print("Starting sum of distances",startingQuality)
+                print(("Starting sum of distances",startingQuality))
             if i % 1000 == 0:
-                print(i,bestQuality)
+                print((i,bestQuality))
 
             if toleranceSteps == 0:
                 swapTable = bestSwapTableBeforeAnnealing.copy()
@@ -369,8 +366,8 @@ class SwapOptimizer:
 
         if bestQuality > startingQuality:
             bestSwapTableBeforeAnnealing = startingSwapTable
-        print("final distance sum:",bestQuality)
-        print("improvement:", startingQuality-bestQuality)
+        print(("final distance sum:",bestQuality))
+        print(("improvement:", startingQuality-bestQuality))
         if startingQuality<bestQuality:
             print("reverting to initial swap table")
         self.lastState = {'cells':cells,'iterations':totalIterations, 'distances':distances,
@@ -558,4 +555,3 @@ class SwapOptimizer:
             b[idx] = 0.0001
         elif b[idx]>10000.0:
             b[idx]=10000.0
-
