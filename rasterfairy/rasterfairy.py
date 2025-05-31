@@ -85,6 +85,16 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
         Returns False if the target grid is too small or has insufficient
         grid points.
     """
+    
+    if points2d is None or len(points2d) == 0:
+        raise ValueError("points2d cannot be empty")
+    
+    if not isinstance(points2d, np.ndarray):
+        points2d = np.array(points2d)
+    
+    if points2d.shape[1] != 2:
+        raise ValueError("points2d must have shape (N, 2)")
+        
     pointCount = len(points2d)
     rasterMask = None
 
@@ -239,13 +249,15 @@ def sliceQuadrant( quadrant, mask = None ):
         
         splitX = (sliceXCount<sliceYCount or (sliceXCount==sliceYCount and grid[2]>grid[3]))
         if splitX:
-            order = np.lexsort((xy[:,1].astype(int),xy[:,0].astype(int)))
+            xy_int = xy.astype(int)
+            order = np.lexsort((xy_int[:, 1], xy_int[:, 0]))
             sliceCount = sliceXCount
             sliceSize  = grid[2] // sliceCount
             pointsPerSlice = grid[3] * sliceSize
             gridOffset = grid[0]
         else:
-            order = np.lexsort((xy[:,0].astype(int),xy[:,1].astype(int)))    
+            xy_int = xy.astype(int)
+            order = np.lexsort((xy_int[:, 0], xy_int[:, 1]))
             sliceCount = sliceYCount
             sliceSize = grid[3] // sliceCount
             pointsPerSlice = grid[2] * sliceSize
@@ -745,7 +757,7 @@ def getArrangements(n, includeHexagonalArrangements = True,includeRectangularArr
         res += getTriangularArrangement(n)
         bestr,bestrp,bestc = getBestCircularMatch(n)
         if bestc == n:
-            res.append( getCircularArrangement(bestr,bestrp))
+            res.append(getCircularArrangement(bestr,bestrp))
     return res
 
 def arrangementListToRasterMasks( arrangements ):
@@ -848,15 +860,15 @@ def getBestCircularMatch(n):
     minr = int(math.sqrt(n / math.pi)) if n > 0 else 1 # ensure minr is at least 1
     if minr == 0: minr = 1 # ensure minr is at least 1
 
-    for rp_val in range(0,10): # Use a different variable name
-        rpf = float(rp_val)/10.0
-        for r_val in range(minr,minr+3): # Use a different variable name
+    for rp_val in range(10): 
+        rpf = rp_val/10.0
+        for r_val in range(minr,minr+3): 
             if r_val == 0: continue # Radius cannot be zero
             rlim = (r_val+rpf)*(r_val+rpf)
-            c_count = 0 # Use a different variable name
-            for y_coord in range(-r_val,r_val+1): # Use a different variable name
+            c_count = 0 
+            for y_coord in range(-r_val,r_val+1): 
                 yy = y_coord*y_coord
-                for x_coord in range(-r_val,r_val+1): # Use a different variable name
+                for x_coord in range(-r_val,r_val+1): 
                     if x_coord*x_coord+yy<rlim:
                         c_count+=1
             if c_count == n:
@@ -868,7 +880,7 @@ def getBestCircularMatch(n):
                 bestc = c_count
     return bestr,bestrp,bestc
 
-def getCircularArrangement(radius,adjustFactor):
+def getCircularArrangement(radius,adjustFactor=0.0):
     """Creates an arrangement dictionary for a circular layout.
 
     Args:
@@ -881,12 +893,12 @@ def getCircularArrangement(radius,adjustFactor):
             - 'rows': A list of integers representing row lengths for the circle.
             - 'type': 'circular'.
     """
-    rows_list = np.zeros( radius*2+1,dtype=int ) # Use a different variable name
+    rows_list = np.zeros( radius*2+1,dtype=int ) 
 
     rlim = (radius+adjustFactor)*(radius+adjustFactor)
-    for y_coord in range(-radius,radius+1): # Use a different variable name
+    for y_coord in range(-radius,radius+1): 
         yy = y_coord*y_coord
-        for x_coord in range(-radius,radius+1): # Use a different variable name
+        for x_coord in range(-radius,radius+1): 
             if x_coord*x_coord+yy<rlim:
                 rows_list[radius+y_coord]+=1
 
