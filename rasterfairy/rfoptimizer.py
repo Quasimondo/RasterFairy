@@ -47,10 +47,10 @@ Euclidean distances between original points and their assigned grid cells.
 """
 
 import scipy.spatial.distance as dist
-from scipy import spatial
+from scipy import spatial, ndimage
 import math
-from IPython.display import clear_output
 import numpy as np
+
 
 class SwapOptimizer:
     """
@@ -78,45 +78,21 @@ class SwapOptimizer:
         lastWidth (int): Width of the grid from the last optimization.
         lastHeight (int): Height of the grid from the last optimization.
     """
-    lastState = None
-    grid_norm = None
-    xy_norm = None
-    lastSwapTable = None
-    lastWidth = 0
-    lastHeight = 0
+    
+    def __init__(self):
+        self.lastState = None
+        self.grid_norm = None
+        self.xy_norm = None
+        self.lastSwapTable = None
+        self.lastWidth = 0
+        self.lastHeight = 0
+        self.strategy_success_history = {}
+        self.recent_improvements = []
+        self.stagnation_counter = 0
 
-    # No explicit __init__ method is defined.
-    # Instance variables are initialized at the class level or within methods.
-
-    def optimize( self, xy, grid, width, height, iterations, shakeIterations = 0,swapTable=None,continueFromLastState = False):
+    def optimize( self, xy, grid, width, height, iterations, shakeIterations = 0, swapTable=None, continueFromLastState = False):
         """
-        Main optimization loop.
-
-        This method iteratively tries different swaps and rotations of grid
-        cell assignments to minimize the sum of squared Euclidean distances
-        between original points (xy) and their assigned grid cells (grid).
-
-        Args:
-            xy (numpy.ndarray): An array of shape (N, 2) representing the
-                original 2D point coordinates.
-            grid (numpy.ndarray): An array of shape (N, 2) representing the
-                target 2D grid cell coordinates.
-            width (int): The width of the grid.
-            height (int): The height of the grid.
-            iterations (int): The number of optimization iterations to perform.
-            shakeIterations (int, optional): Number of random swaps to perform
-                at the beginning to "shake" the arrangement. Defaults to 0.
-            swapTable (numpy.ndarray, optional): An initial mapping of original
-                point indices to grid cell indices. If None, an identity mapping
-                is created. Defaults to None.
-            continueFromLastState (bool, optional): If True, the optimization
-                will attempt to continue from where the last `optimize` call
-                left off (using `self.lastState`). Defaults to False.
-
-        Returns:
-            numpy.ndarray: The optimized swapTable, representing the best
-            mapping found from original point indices to grid cell indices.
-            Returns None if there's an error in cell mapping during initialization.
+        Main optimization loop with enhanced learning and adaptive strategies (optimized version).
         """
 
         if self.lastState is None or not continueFromLastState:
@@ -130,34 +106,29 @@ class SwapOptimizer:
 
             self.lastWidth = width
             self.lastHeight = height
-        else: # continueFromLastState is True
+        else: 
             width = self.lastWidth
             height = self.lastHeight
-            if self.grid_norm is None or self.xy_norm is None: # Should not happen if lastState is valid
+            if self.grid_norm is None or self.xy_norm is None:
                 raise ValueError("Optimizer state is incomplete for continuation.")
 
-
-        reward = 5.0
-        punish = 0.999
+        reward = 1.2
+        punish = 0.99
 
         totalEntries = len(self.grid_norm)
 
         choiceModes = np.arange(10)
-        # Ensure colSizes and rowSizes are not empty if width/height is 1
         colSizes = np.arange(1,max(2,width))
         rowSizes = np.arange(1,max(2,height))
         swapOffsets = np.arange(1,9)
-        offsets = np.array([[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[-1,1],[-1,-1]])
+        offsets = np.array([[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]])
         toleranceChoices = np.arange(1,16)
 
         if swapTable is None:
             swapTable =  np.arange(totalEntries)
 
-
         if self.lastState is None or not continueFromLastState:
             cells = np.zeros((width, height),dtype=int)
-
-
             ci = {}
             for j in range(totalEntries):
                 cx = int(0.5+self.grid_norm[j][0]*(width-1))
@@ -170,7 +141,7 @@ class SwapOptimizer:
 
             if len(ci) != totalEntries:
                 print("ERROR in cell mapping")
-                return None # Indicate error
+                return None
 
             distances = dist.cdist(self.grid_norm, self.xy_norm, 'sqeuclidean')
             swapChoiceWeights = np.array([1.0] * len(choiceModes),dtype=np.float64)
@@ -179,7 +150,25 @@ class SwapOptimizer:
             swapOffsetWeights = np.array([1.0] * len(swapOffsets),dtype=np.float64)
             toleranceWeights = np.array([1.0] * len(toleranceChoices),dtype=np.float64)
             totalIterations = iterations
-        else: # continueFromLastState is True
+            
+            # OPTIMIZED: Reduce update frequencies and pre-compute expensive operations
+            heat_map_update_frequency = max(500, iterations // 20)
+            disorder_check_frequency = max(200, iterations // 50)
+            smart_learning_frequency = max(100, iterations // 100)
+            
+            heat_map = None
+            cached_disorder_level = 0.5
+            last_quality_for_disorder = 0
+            
+            # Pre-compute some expensive values
+            min_distances_per_point = np.min(distances, axis=0)
+            theoretical_min_quality = np.sum(min_distances_per_point)
+            
+            # Initialize strategy success tracking
+            if not hasattr(self, 'strategy_success_history'):
+                self.strategy_success_history = {}
+                
+        else: 
             cells = self.lastState['cells']
             distances = self.lastState['distances']
             swapChoiceWeights = self.lastState['swapChoiceWeights']
@@ -188,11 +177,22 @@ class SwapOptimizer:
             swapOffsetWeights =self.lastState['swapOffsetWeights']
             toleranceWeights = self.lastState['toleranceWeights']
             totalIterations = self.lastState['iterations']+iterations
-
+            
+            # Restore optimized variables
+            heat_map_update_frequency = self.lastState.get('heat_map_update_frequency', max(500, iterations // 20))
+            disorder_check_frequency = max(200, iterations // 50)
+            smart_learning_frequency = max(100, iterations // 100)
+            heat_map = None
+            cached_disorder_level = self.lastState.get('cached_disorder_level', 0.5)
+            
+            min_distances_per_point = np.min(distances, axis=0)
+            theoretical_min_quality = np.sum(min_distances_per_point)
 
         bestQuality = startingQuality = self.sumDistances(swapTable,distances)
         startingSwapTable = swapTable.copy()
+        last_quality_for_disorder = bestQuality
         print(("Starting sum of distances",startingQuality))
+        
         if shakeIterations > 0:
             self.shake(cells,swapTable,shakeIterations,1,width,height)
             bestQuality = self.sumDistances(swapTable,distances)
@@ -203,27 +203,59 @@ class SwapOptimizer:
 
         for i in range(iterations):
             if i>0 and i % 20000 == 0:
-                clear_output(wait=True)
                 print(("Starting sum of distances",startingQuality))
+                
             if i % 1000 == 0:
                 print((i,bestQuality))
+
+            current_quality = self.sumDistances(swapTable, distances)
+            
+            # Update disorder level only periodically
+            if i % disorder_check_frequency == 0:
+                cached_disorder_level = self.measureDisorderFast(current_quality, theoretical_min_quality, startingQuality)
+                last_quality_for_disorder = current_quality
+                print(f"Disorder Level: {cached_disorder_level}")
+
+            # Update heat map less frequently
+            if i % heat_map_update_frequency == 0:
+                heat_map = self.buildHeatMapFast(swapTable, distances, width, height)
+            
+            # Create context with cached values
+            current_context = {'disorder': cached_disorder_level, 'iteration': i}
+            
+            # Use smart weights only periodically, otherwise use simple adaptive weights
+            if i % smart_learning_frequency == 0:
+                base_adaptive_weights = self.getAdaptiveWeights(swapChoiceWeights, cached_disorder_level, 'swapChoice')
+                smart_swap_weights = self.getSmartWeights(base_adaptive_weights, current_context)
+                adaptive_col_weights = self.getAdaptiveWeights(colSizeWeights, cached_disorder_level, 'blockSize')
+                adaptive_row_weights = self.getAdaptiveWeights(rowSizeWeights, cached_disorder_level, 'blockSize')
+            else:
+                # Use simpler adaptive weights most of the time
+                smart_swap_weights = self.getAdaptiveWeights(swapChoiceWeights, cached_disorder_level, 'swapChoice')
+                adaptive_col_weights = colSizeWeights
+                adaptive_row_weights = rowSizeWeights
 
             if toleranceSteps == 0:
                 swapTable = bestSwapTableBeforeAnnealing.copy()
                 chosenToleranceSteps = toleranceSteps = np.random.choice(toleranceChoices,p=toleranceWeights/np.sum(toleranceWeights))
-                #if np.random.random() < 0.001:
-                #    shake(cells,swapTable,np.random.randint(1,3),1,width,height)
-
 
             toleranceSteps -= 1
 
-            cellx = np.random.randint(0,width)
-            celly = np.random.randint(0,height)
+            if heat_map is not None and i % 3 == 0:
+                cellx, celly = self.selectHotCellFast(heat_map, width, height)
+            else:
+                cellx = np.random.randint(0,width)
+                celly = np.random.randint(0,height)
 
-            #since the offset gets changed it's important to use a fresh copy - do not remove the copy()!
             cp = offsets.copy()[np.random.randint(0,8)]
 
-            swapChoice = np.random.choice(choiceModes,p=swapChoiceWeights/np.sum(swapChoiceWeights))
+            # Use the (possibly simplified) smart weights
+            swapChoice = np.random.choice(choiceModes, p=smart_swap_weights/np.sum(smart_swap_weights))
+            
+            # Store quality before operation for learning (but only track every few iterations)
+            quality_before_operation = current_quality
+            should_track = (i % 10 == 0)
+            
             if swapChoice == 0:
                 offsetx = np.random.choice(swapOffsets,p=swapOffsetWeights/np.sum(swapOffsetWeights))
                 offsety = np.random.choice(swapOffsets,p=swapOffsetWeights/np.sum(swapOffsetWeights))
@@ -231,6 +263,11 @@ class SwapOptimizer:
                 cp[1] *= offsety
                 self.swapIndices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height])
                 quality = self.sumDistances(swapTable,distances)
+                
+                if should_track:
+                    improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                    self.trackStrategySuccess(swapChoice, improvement, current_context)
+                
                 if quality < bestQuality:
                     bestQuality = quality
                     bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -238,25 +275,29 @@ class SwapOptimizer:
                     self.learnWeight(swapChoiceWeights,swapChoice,reward)
                     self.learnWeight(swapOffsetWeights,offsetx-1,reward)
                     self.learnWeight(swapOffsetWeights,offsety-1,reward)
-                elif toleranceSteps == 0: # Only revert and punish if no improvement after tolerance steps
-                    self.swapIndices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height]) # Revert
+                elif toleranceSteps == 0:
+                    self.swapIndices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height])
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
                     self.learnWeight(swapChoiceWeights,swapChoice,punish)
                     self.learnWeight(swapOffsetWeights,offsetx-1,punish)
                     self.learnWeight(swapOffsetWeights,offsety-1,punish)
 
-
             elif swapChoice == 1:
                 rotateLeft = np.random.random() < 0.5
                 self.rotate3Indices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height],cells[(cellx+width+cp[0]*2)%width][(celly+height+cp[1]*2)%height],rotateLeft)
                 quality = self.sumDistances(swapTable,distances)
+                
+                if should_track:
+                    improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                    self.trackStrategySuccess(swapChoice, improvement, current_context)
+                
                 if quality < bestQuality:
                     bestQuality = quality
                     bestSwapTableBeforeAnnealing = swapTable.copy()
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,reward)
                     self.learnWeight(swapChoiceWeights,swapChoice,reward)
                 elif toleranceSteps == 0:
-                    self.rotate3Indices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height],cells[(cellx+width+cp[0]*2)%width][(celly+height+cp[1]*2)%height],not rotateLeft) # Revert
+                    self.rotate3Indices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height],cells[(cellx+width+cp[0]*2)%width][(celly+height+cp[1]*2)%height],not rotateLeft)
                     self.learnWeight(swapChoiceWeights,swapChoice,punish)
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
 
@@ -268,6 +309,11 @@ class SwapOptimizer:
                                cells[(cellx+width+cp[0]*2)%width][(celly+height+cp[1]*2)%height],
                                cells[(cellx+width+cp[0]*3)%width][(celly+height+cp[1]*3)%height],rotateLeft)
                 quality = self.sumDistances(swapTable,distances)
+                
+                if should_track:
+                    improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                    self.trackStrategySuccess(swapChoice, improvement, current_context)
+                
                 if quality < bestQuality:
                     bestQuality = quality
                     bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -279,7 +325,7 @@ class SwapOptimizer:
                                    cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height],
                                    cells[(cellx+width+cp[0]*2)%width][(celly+height+cp[1]*2)%height],
                                    cells[(cellx+width+cp[0]*3)%width][(celly+height+cp[1]*3)%height],
-                                   not rotateLeft) # Revert
+                                   not rotateLeft)
                     self.learnWeight(swapChoiceWeights,swapChoice,punish)
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
 
@@ -292,6 +338,11 @@ class SwapOptimizer:
                                cells[(cellx+width+cp[0]*3)%width][(celly+height+cp[1]*3)%height],
                                cells[(cellx+width+cp[0]*4)%width][(celly+height+cp[1]*4)%height],rotateLeft)
                 quality = self.sumDistances(swapTable,distances)
+                
+                if should_track:
+                    improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                    self.trackStrategySuccess(swapChoice, improvement, current_context)
+                
                 if quality < bestQuality:
                     bestQuality = quality
                     bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -304,18 +355,22 @@ class SwapOptimizer:
                                    cells[(cellx+width+cp[0]*2)%width][(celly+height+cp[1]*2)%height],
                                    cells[(cellx+width+cp[0]*3)%width][(celly+height+cp[1]*3)%height],
                                    cells[(cellx+width+cp[0]*4)%width][(celly+height+cp[1]*4)%height],
-                                   not rotateLeft) # Revert
+                                   not rotateLeft)
                     self.learnWeight(swapChoiceWeights,swapChoice,punish)
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
 
-
             elif swapChoice == 4:
-                cols = np.random.choice(colSizes,p=colSizeWeights/np.sum(colSizeWeights))
-                rows = np.random.choice(rowSizes,p=rowSizeWeights/np.sum(rowSizeWeights))
+                cols = np.random.choice(colSizes, p=adaptive_col_weights/np.sum(adaptive_col_weights))
+                rows = np.random.choice(rowSizes, p=adaptive_row_weights/np.sum(adaptive_row_weights))
                 cellx2 = np.random.randint(0,width-cols)
                 celly2 = np.random.randint(0,height-rows)
                 if self.swapBlock(cells,swapTable,cellx,celly,cellx2,celly2,cols,rows,width,height):
                     quality = self.sumDistances(swapTable,distances)
+                    
+                    if should_track:
+                        improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                        self.trackStrategySuccess(swapChoice, improvement, current_context)
+                    
                     if quality < bestQuality:
                         bestQuality = quality
                         bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -324,23 +379,28 @@ class SwapOptimizer:
                         self.learnWeight(colSizeWeights,cols-1,reward)
                         self.learnWeight(rowSizeWeights,rows-1,reward)
                     elif toleranceSteps == 0:
-                        self.swapBlock(cells,swapTable,cellx,celly,cellx2,celly2,cols,rows,width,height) # Revert
+                        self.swapBlock(cells,swapTable,cellx,celly,cellx2,celly2,cols,rows,width,height)
                         self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
                         self.learnWeight(swapChoiceWeights,swapChoice,punish)
                         self.learnWeight(colSizeWeights,cols-1,punish)
                         self.learnWeight(rowSizeWeights,rows-1,punish)
 
             elif swapChoice == 5:
-                cols = np.random.choice(colSizes,p=colSizeWeights/np.sum(colSizeWeights))
-                rows = np.random.choice(rowSizes,p=rowSizeWeights/np.sum(rowSizeWeights))
+                cols = np.random.choice(colSizes, p=adaptive_col_weights/np.sum(adaptive_col_weights))
+                rows = np.random.choice(rowSizes, p=adaptive_row_weights/np.sum(adaptive_row_weights))
                 dx = dy = 0
                 if np.random.random() < 0.5:
-                    dx = np.random.randint(-cellx,width-cols) if width-cols > -cellx else 0
+                    dx = np.random.randint(-cellx,width-cellx-cols) if width-cellx-cols > -cellx else 0
                 else:
-                    dy = np.random.randint(-celly,height-rows) if height-rows > -celly else 0
+                    dy = np.random.randint(-celly,height-celly-rows) if height-celly-rows > -celly else 0
 
                 if self.shiftBlock(cells,swapTable,cellx,celly,cols,rows,dx,dy,width,height):
                     quality = self.sumDistances(swapTable,distances)
+                    
+                    if should_track:
+                        improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                        self.trackStrategySuccess(swapChoice, improvement, current_context)
+                    
                     if quality < bestQuality:
                         bestQuality = quality
                         bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -349,19 +409,24 @@ class SwapOptimizer:
                         self.learnWeight(colSizeWeights,cols-1,reward)
                         self.learnWeight(rowSizeWeights,rows-1,reward)
                     elif toleranceSteps == 0:
-                        self.shiftBlock(cells,swapTable,cellx+dx,celly+dy,cols,rows,-dx,-dy,width,height) # Revert
+                        self.shiftBlock(cells,swapTable,cellx+dx,celly+dy,cols,rows,-dx,-dy,width,height)
                         self.learnWeight(swapChoiceWeights,swapChoice,punish)
                         self.learnWeight(colSizeWeights,cols-1,punish)
                         self.learnWeight(rowSizeWeights,rows-1,punish)
                         self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
 
             elif swapChoice == 6:
-                cols = np.random.choice(colSizes,p=colSizeWeights/np.sum(colSizeWeights))
-                rows = np.random.choice(rowSizes,p=rowSizeWeights/np.sum(rowSizeWeights))
+                cols = np.random.choice(colSizes, p=adaptive_col_weights/np.sum(adaptive_col_weights))
+                rows = np.random.choice(rowSizes, p=adaptive_row_weights/np.sum(adaptive_row_weights))
                 flipxy = [[True,False],[False,True],[True,True]][np.random.randint(0,3)]
 
                 if self.flipBlock(cells,swapTable,cellx,celly,cols,rows,flipxy[0],flipxy[1],width,height):
                     quality = self.sumDistances(swapTable,distances)
+                    
+                    if should_track:
+                        improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                        self.trackStrategySuccess(swapChoice, improvement, current_context)
+                    
                     if quality < bestQuality:
                         bestQuality = quality
                         bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -370,18 +435,23 @@ class SwapOptimizer:
                         self.learnWeight(colSizeWeights,cols-1,reward)
                         self.learnWeight(rowSizeWeights,rows-1,reward)
                     elif toleranceSteps == 0:
-                        self.flipBlock(cells,swapTable,cellx,celly,cols,rows,flipxy[0],flipxy[1],width,height) # Revert
+                        self.flipBlock(cells,swapTable,cellx,celly,cols,rows,flipxy[0],flipxy[1],width,height)
                         self.learnWeight(swapChoiceWeights,swapChoice,punish)
                         self.learnWeight(colSizeWeights,cols-1,punish)
                         self.learnWeight(rowSizeWeights,rows-1,punish)
                         self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
 
             elif swapChoice == 7:
-                cols = np.random.choice(colSizes,p=colSizeWeights/np.sum(colSizeWeights))
-                rows = np.random.choice(rowSizes,p=rowSizeWeights/np.sum(rowSizeWeights))
+                cols = np.random.choice(colSizes, p=adaptive_col_weights/np.sum(adaptive_col_weights))
+                rows = np.random.choice(rowSizes, p=adaptive_row_weights/np.sum(adaptive_row_weights))
                 oldState = self.shuffleBlock(cells,swapTable,cellx,celly,cols,rows,width,height)
                 if len(oldState)>0:
                     quality = self.sumDistances(swapTable,distances)
+                    
+                    if should_track:
+                        improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                        self.trackStrategySuccess(swapChoice, improvement, current_context)
+                    
                     if quality < bestQuality:
                         bestQuality = quality
                         bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -389,24 +459,29 @@ class SwapOptimizer:
                         self.learnWeight(swapChoiceWeights,swapChoice,reward)
                         self.learnWeight(colSizeWeights,cols-1,reward)
                         self.learnWeight(rowSizeWeights,rows-1,reward)
-                    elif toleranceSteps == 0:
-                        self.restoreBlock(cells,swapTable,cellx,celly,cols,rows,oldState) # Revert
+                    elif toleranceSteps == 0 and len(oldState) > 0:
+                        self.restoreBlock(cells,swapTable,cellx,celly,cols,rows,oldState)
                         self.learnWeight(swapChoiceWeights,swapChoice,punish)
                         self.learnWeight(colSizeWeights,cols-1,punish)
                         self.learnWeight(rowSizeWeights,rows-1,punish)
                         self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
-
+                        
             elif swapChoice == 8:
                 rotateLeft = np.random.random() < 0.5
                 self.rotate3Indices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height],cells[(cellx+width+cp[1])%width][(celly+height+cp[0])%height],rotateLeft)
                 quality = self.sumDistances(swapTable,distances)
+                
+                if should_track:
+                    improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                    self.trackStrategySuccess(swapChoice, improvement, current_context)
+                
                 if quality < bestQuality:
                     bestQuality = quality
                     bestSwapTableBeforeAnnealing = swapTable.copy()
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,reward)
                     self.learnWeight(swapChoiceWeights,swapChoice,reward)
                 elif toleranceSteps == 0:
-                    self.rotate3Indices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height],cells[(cellx+width+cp[1])%width][(celly+height+cp[0])%height],not rotateLeft) # Revert
+                    self.rotate3Indices(swapTable,cells[cellx][celly],cells[(cellx+width+cp[0])%width][(celly+height+cp[1])%height],cells[(cellx+width+cp[1])%width][(celly+height+cp[0])%height],not rotateLeft)
                     self.learnWeight(swapChoiceWeights,swapChoice,punish)
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
 
@@ -418,6 +493,11 @@ class SwapOptimizer:
                                cells[(cellx+width+1)%width][(celly+height+1)%height],
                                cells[cellx][(celly+height+1)%height],rotateLeft)
                 quality = self.sumDistances(swapTable,distances)
+                
+                if should_track:
+                    improvement = quality_before_operation - quality if quality < quality_before_operation else 0
+                    self.trackStrategySuccess(swapChoice, improvement, current_context)
+                
                 if quality < bestQuality:
                     bestQuality = quality
                     bestSwapTableBeforeAnnealing = swapTable.copy()
@@ -428,26 +508,25 @@ class SwapOptimizer:
                                cells[cellx][celly],
                                cells[(cellx+width+1)%width][celly],
                                cells[(cellx+width+1)%width][(celly+height+1)%height],
-                               cells[cellx][(celly+height+1)%height], not rotateLeft) # Revert
+                               cells[cellx][(celly+height+1)%height], not rotateLeft)
                     self.learnWeight(swapChoiceWeights,swapChoice,punish)
                     self.learnWeight(toleranceWeights,chosenToleranceSteps-1,punish)
 
-
-        if bestQuality > startingQuality: # If no improvement at all, revert to original
+        if bestQuality > startingQuality:
             bestSwapTableBeforeAnnealing = startingSwapTable
             bestQuality = startingQuality
 
         print(("final distance sum:",bestQuality))
         print(("improvement:", startingQuality-bestQuality))
-        if startingQuality<bestQuality: # This condition might be redundant now
-            print("reverting to initial swap table") # Should already be handled by the above
+       
         self.lastState = {'cells':cells,'iterations':totalIterations, 'distances':distances,
-                                              'swapChoiceWeights':swapChoiceWeights,'swapOffsetWeights':swapOffsetWeights,
-                                              'colSizeWeights':colSizeWeights,'rowSizeWeights':rowSizeWeights,
-                                              'toleranceWeights':toleranceWeights}
+                          'swapChoiceWeights':swapChoiceWeights,'swapOffsetWeights':swapOffsetWeights,
+                          'colSizeWeights':colSizeWeights,'rowSizeWeights':rowSizeWeights,
+                          'toleranceWeights':toleranceWeights,
+                          'heat_map_update_frequency': heat_map_update_frequency,
+                          'cached_disorder_level': cached_disorder_level}
 
         self.lastSwapTable = bestSwapTableBeforeAnnealing.copy()
-
         return bestSwapTableBeforeAnnealing
 
     def continueOptimization( self, iterations, shakeIterations = 0):
@@ -507,34 +586,19 @@ class SwapOptimizer:
         """
         if len(set([i1,i2,i3]))!=3: # Ensure unique indices before proceeding
             return
-        if rotateLeft:
-            # d[i1], d[i2], d[i3] = d[i2], d[i3], d[i1] # Original logic was this for left
-            d[i2],d[i3],d[i1] = d[i1],d[i2],d[i3] # Corrected: i1->i2, i2->i3, i3->i1
-        else:
-            # d[i1], d[i2], d[i3] = d[i3], d[i1], d[i2] # Original logic was this for right
-            d[i3],d[i1],d[i2] = d[i1],d[i2],d[i3] # Corrected: i1->i3, i3->i2, i2->i1
-        # The provided code had d[i2],d[i3],d[i1] = d[i3],d[i2],d[i1] for both, which is a swap of i1,i3
-        # Correcting to actual rotation.
-        # For left: temp = d[i1]; d[i1]=d[i2]; d[i2]=d[i3]; d[i3]=temp;
-        # For right: temp = d[i1]; d[i1]=d[i3]; d[i3]=d[i2]; d[i2]=temp;
-        # The current implementation in the original code for rotateLeft:
-        # d[i2],d[i3],d[i1] = d[i3],d[i2],d[i1] means:
-        # new d[i2] = old d[i3]
-        # new d[i3] = old d[i2]
-        # new d[i1] = old d[i1] (this is wrong, it should be old d[i1])
-        # This results in d[i1] being untouched, and d[i2] and d[i3] swapped.
-        # A true 3-cycle rotation:
-        if rotateLeft: # i1->i2, i2->i3, i3->i1
+            
+        if rotateLeft: 
             val_i1 = d[i1]
-            d[i1] = d[i3] # i1 gets value from i3
-            d[i3] = d[i2] # i3 gets value from i2
-            d[i2] = val_i1 # i2 gets value from i1
-        else: # i1->i3, i3->i2, i2->i1 (right rotation)
+            d[i1] = d[i2]
+            d[i2] = d[i3]
+            d[i3] = val_i1
+           
+        else: 
             val_i1 = d[i1]
-            d[i1] = d[i2] # i1 gets value from i2
-            d[i2] = d[i3] # i2 gets value from i3
-            d[i3] = val_i1 # i3 gets value from i1
-
+            d[i1] = d[i3]
+            d[i3] = d[i2]
+            d[i2] = val_i1
+        
 
     def rotate4Indices(self,d,i1,i2,i3,i4,rotateLeft=True):
         """
@@ -554,19 +618,13 @@ class SwapOptimizer:
         """
         if len(set([i1,i2,i3,i4]))!=4: # Ensure unique indices
             return
-        if rotateLeft: # i1->i2, i2->i3, i3->i4, i4->i1
-            # d[i1],d[i4],d[i3],d[i2] = d[i4],d[i3],d[i2],d[i1] # Original logic
-            # This means: new d[i1]=old d[i4], new d[i4]=old d[i3], new d[i3]=old d[i2], new d[i2]=old d[i1]
-            # This is a left rotation: i1 <- i2 <- i3 <- i4 <- i1
+        if rotateLeft: 
             val_i1 = d[i1]
             d[i1] = d[i2]
             d[i2] = d[i3]
             d[i3] = d[i4]
             d[i4] = val_i1
-        else: # i1->i4, i4->i3, i3->i2, i2->i1 (right rotation)
-            # d[i3],d[i2],d[i1],d[i4] = d[i4],d[i3],d[i2],d[i1] # Original logic
-            # This means: new d[i3]=old d[i4], new d[i2]=old d[i3], new d[i1]=old d[i2], new d[i4]=old d[i1]
-            # This is a right rotation: i1 -> i4 -> i3 -> i2 -> i1
+        else: 
             val_i1 = d[i1]
             d[i1] = d[i4]
             d[i4] = d[i3]
@@ -588,20 +646,14 @@ class SwapOptimizer:
         """
         if len(set([i1,i2,i3,i4,i5]))!=5: # Ensure unique indices
             return
-        if rotateLeft: # i1->i2, i2->i3, i3->i4, i4->i5, i5->i1
-            # d[i1],d[i5],d[i4],d[i3],d[i2] = d[i5],d[i4],d[i3],d[i2],d[i1] # Original
-            # This is: new d[i1]=old d[i5], new d[i5]=old d[i4], new d[i4]=old d[i3], new d[i3]=old d[i2], new d[i2]=old d[i1]
-            # This is a left rotation: i1 <- i2 <- i3 <- i4 <- i5 <- i1
+        if rotateLeft: 
             val_i1 = d[i1]
             d[i1] = d[i2]
             d[i2] = d[i3]
             d[i3] = d[i4]
             d[i4] = d[i5]
             d[i5] = val_i1
-        else: # i1->i5, i5->i4, i4->i3, i3->i2, i2->i1 (right rotation)
-            # d[i4],d[i3],d[i2],d[i1],d[i5] = d[i5],d[i4],d[i3],d[i2],d[i1] # Original
-            # This is: new d[i4]=old d[i5], new d[i3]=old d[i4], new d[i2]=old d[i3], new d[i1]=old d[i2], new d[i5]=old d[i1]
-            # This is a right rotation: i1 -> i5 -> i4 -> i3 -> i2 -> i1
+        else: 
             val_i1 = d[i1]
             d[i1] = d[i5]
             d[i5] = d[i4]
@@ -714,30 +766,7 @@ class SwapOptimizer:
 
     def shiftBlock(self,cells,d,tlx,tly,cols,rows,dx,dy,width,height):
         """
-        Shifts a block of cell assignments horizontally or vertically.
-
-        The block is shifted by `dx` columns or `dy` rows. The elements
-        that are shifted out of one side of the grid wrap around to the
-        other side if the shift is within the block's own dimension.
-        This implementation seems to handle shifts by overwriting,
-        with the "empty" space being filled by elements from the other end.
-
-        Args:
-            cells (numpy.ndarray): 2D array mapping grid coords to indices.
-            d (numpy.ndarray): The swapTable to modify.
-            tlx (int): Top-left x of the block to shift.
-            tly (int): Top-left y of the block to shift.
-            cols (int): Width of the block.
-            rows (int): Height of the block.
-            dx (int): Shift in x-direction (number of columns).
-            dy (int): Shift in y-direction (number of rows).
-            width (int): Total grid width.
-            height (int): Total grid height.
-
-        Returns:
-            bool: True if shift was valid and performed, False otherwise.
-                  A shift is invalid if dx and dy are both non-zero or both zero,
-                  if the block size is < 2, or if boundaries are violated.
+        Shifts a rectangular block of cell assignments horizontally or vertically.
         """
         if (dx!=0 and dy!= 0) or (dx==0 and dy == 0) or cols*rows < 2:
             return False
@@ -752,6 +781,14 @@ class SwapOptimizer:
                 tlx + dx + cols <= width and tly + dy + rows <= height):
             return False
 
+        # NEW: Check for overlap between source and destination
+        # Source block: (tlx, tly) to (tlx+cols-1, tly+rows-1)
+        # Dest block: (tlx+dx, tly+dy) to (tlx+dx+cols-1, tly+dy+rows-1)
+        if not (tlx + cols <= tlx + dx or tlx + dx + cols <= tlx or \
+                tly + rows <= tly + dy or tly + dy + rows <= tly):
+            # Blocks overlap, which would cause data corruption
+            return False
+
         # Values of the block that will be moved
         block_to_move_values = []
         for r in range(rows):
@@ -759,7 +796,6 @@ class SwapOptimizer:
                 block_to_move_values.append(d[cells[tlx+c][tly+r]])
 
         # Values of the area that the block_to_move will overwrite
-        # These are the values that will effectively "wrap around" or fill the vacated space
         area_to_be_overwritten_values = []
         for r in range(rows):
             for c in range(cols):
@@ -842,7 +878,7 @@ class SwapOptimizer:
             row = np.random.randint(0,height)
             # Ensure ox, oy allow for actual movement
             ox, oy = 0, 0
-            while ox == 0 and oy == 0: # Ensure there is some offset
+            while ox == 0 and oy == 0 and strength>0: # Ensure there is some offset
                  ox = np.random.randint(-strength,strength+1)
                  oy = np.random.randint(-strength,strength+1)
 
@@ -853,7 +889,7 @@ class SwapOptimizer:
                     self.swapIndices(d, i1, i2) # Use the class method
 
 
-    def sumDistances(self,swapTable,distances):
+    def sumDistances(self,swapTable, distances):
         """
         Calculates the sum of squared Euclidean distances for the current
         arrangement in the swapTable.
@@ -870,7 +906,6 @@ class SwapOptimizer:
             float: The sum of squared distances for the current mapping.
         """
         r_indices = np.arange(len(swapTable)) # Original point indices
-        # distances[swapTable[original_point_idx], original_point_idx]
         return np.sum(distances[swapTable[r_indices],r_indices])
 
     def learnWeight( self,b, idx, f ):
@@ -894,3 +929,171 @@ class SwapOptimizer:
             b[idx] = 0.0001
         elif b[idx]>10000.0:
             b[idx]=10000.0
+            
+    
+    
+    def measureDisorderFast(self, current_quality, theoretical_min, starting_quality):
+        """
+        Fast disorder measurement using pre-computed values.
+        """
+        # Use starting quality as max estimate instead of computing random samples
+        if starting_quality <= theoretical_min:
+            return 0.0
+        
+        disorder_level = (current_quality - theoretical_min) / (starting_quality - theoretical_min)
+        return np.clip(disorder_level, 0, 1)
+        
+    def getAdaptiveWeights(self, base_weights, disorder_level, strategy_type):
+        """
+        Adjusts strategy weights based on current disorder level.
+        """
+        if strategy_type == 'swapChoice':
+            # High disorder: favor larger operations (blocks, shuffles)
+            # Low disorder: favor smaller operations (swaps, rotations)
+            disorder_bias = np.array([
+                0.5,  # choice 0: basic swaps - always useful
+                0.3,  # choice 1: 3-rotations - more useful when ordered
+                0.3,  # choice 2: 4-rotations - more useful when ordered  
+                0.2,  # choice 3: 5-rotations - more useful when ordered
+                1.5,  # choice 4: block swaps - more useful when disordered
+                1.0,  # choice 5: block shifts - useful throughout
+                0.8,  # choice 6: block flips - moderately useful when disordered
+                2.0,  # choice 7: shuffles - very useful when disordered
+                0.4,  # choice 8: triangle rotations - fine-tuning
+                0.4   # choice 9: square rotations - fine-tuning
+            ])
+            
+            # Interpolate between conservative (low disorder) and aggressive (high disorder)
+            adaptive_multiplier = disorder_bias * disorder_level + (1 - disorder_level)
+            return base_weights * adaptive_multiplier
+            
+        elif strategy_type == 'blockSize':
+            # High disorder: favor larger blocks
+            size_bias = 1 + disorder_level * 2  # Scale from 1x to 3x for larger sizes
+            return base_weights * (np.arange(len(base_weights)) * size_bias + 1)
+            
+        return base_weights        
+        
+    
+    def buildHeatMapFast(self, swapTable, distances, width, height):
+        """
+        Faster heat map building with simplified calculations.
+        """
+        heat_map = np.zeros((width, height))
+        
+        # Sample only every Nth point for speed
+        sample_step = max(1, len(swapTable) // 1000)  # Sample at most 1000 points
+        
+        for i in range(0, len(swapTable), sample_step):
+            grid_idx = swapTable[i]
+            gx = int(0.5 + self.grid_norm[grid_idx][0] * (width-1))
+            gy = int(0.5 + self.grid_norm[grid_idx][1] * (height-1))
+            
+            # Simplified heat calculation - just use current distance without finding optimal
+            current_distance = distances[grid_idx, i]
+            heat_map[gx, gy] += current_distance
+        
+        # Skip Gaussian filter for speed
+        # Normalize to probabilities
+        if np.max(heat_map) > 0:
+            heat_map = heat_map / np.max(heat_map)
+        
+        return heat_map 
+        
+   
+    
+    def selectHotCellFast(self, heat_map, width, height):
+        """
+        Faster hot cell selection using simplified probability.
+        """
+        # Simple approach: find the hottest regions and pick randomly among top 20%
+        flat_heat = heat_map.flatten()
+        if np.max(flat_heat) == 0:
+            return np.random.randint(0, width), np.random.randint(0, height)
+        
+        # Find top 20% threshold
+        threshold = np.percentile(flat_heat, 80)
+        hot_indices = np.where(flat_heat >= threshold)[0]
+        
+        if len(hot_indices) == 0:
+            return np.random.randint(0, width), np.random.randint(0, height)
+        
+        selected_idx = np.random.choice(hot_indices)
+        cellx = selected_idx % width
+        celly = selected_idx // width
+        
+        return cellx, celly
+        
+    def trackStrategySuccess(self, strategy_id, improvement, context):
+        """
+        Track detailed success metrics for each strategy.
+        """
+        if strategy_id not in self.strategy_success_history:
+            self.strategy_success_history[strategy_id] = {
+                'attempts': 0,
+                'successes': 0,
+                'total_improvement': 0,
+                'context_performance': {}  # Performance in different contexts
+            }
+        
+        history = self.strategy_success_history[strategy_id]
+        history['attempts'] += 1
+        
+        # Define context_key early so it's always available
+        context_key = f"disorder_{int(context['disorder']*10)}"
+        
+        # Initialize context performance tracking if needed
+        if context_key not in history['context_performance']:
+            history['context_performance'][context_key] = {'attempts': 0, 'successes': 0}
+        
+        # Always increment attempts for this context
+        history['context_performance'][context_key]['attempts'] += 1
+        
+        # Only track successes if there was improvement
+        if improvement > 0:
+            history['successes'] += 1
+            history['total_improvement'] += improvement
+            history['context_performance'][context_key]['successes'] += 1  
+            
+    def getSmartWeights(self, base_weights, current_context):
+        """
+        Calculate weights based on historical performance in similar contexts.
+        """
+        smart_weights = base_weights.copy()
+        
+        for i, weight in enumerate(base_weights):
+            if i in self.strategy_success_history:
+                history = self.strategy_success_history[i]
+                
+                # Base success rate
+                if history['attempts'] > 10:  # Only adjust if we have enough data
+                    success_rate = history['successes'] / history['attempts']
+                    smart_weights[i] *= (0.5 + success_rate)  # Scale between 0.5x and 1.5x
+                    
+                # Context-specific adjustment
+                context_key = f"disorder_{int(current_context['disorder']*10)}"
+                if context_key in history['context_performance']:
+                    ctx_perf = history['context_performance'][context_key]
+                    if ctx_perf['attempts'] > 5:
+                        ctx_success_rate = ctx_perf['successes'] / ctx_perf['attempts']
+                        smart_weights[i] *= (0.7 + 0.6 * ctx_success_rate)
+        
+        return smart_weights        
+        
+    def detectConvergence(self, recent_improvements, window_size=1000):
+        """
+        Detect if optimization has converged and suggest phase changes.
+        """
+        if len(recent_improvements) < window_size:
+            return False, "early"
+        
+        recent_window = recent_improvements[-window_size:]
+        improvement_rate = np.mean(recent_window)
+        improvement_std = np.std(recent_window)
+        
+        if improvement_rate < 1e-8 and improvement_std < 1e-8:
+            return True, "converged"
+        elif improvement_rate < 1e-6:
+            return False, "fine_tuning"
+        else:
+            return False, "active"                           
