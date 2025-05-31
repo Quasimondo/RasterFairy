@@ -33,6 +33,13 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+"""
+This module implements Coons warp, a technique for image warping.
+
+It is based on Paul S. Heckbert's "Bilinear coons patch image warping"
+from Graphics Gems IV, pages 438-446.
+http://dl.acm.org/citation.cfm?id=180937
+"""
 
 from scipy.spatial import ConvexHull, KDTree, distance
 import numpy as np
@@ -40,7 +47,20 @@ from scipy import interpolate
 import math
 
 def warpCloud( xyc, sourceGridPoints, targetGridPoints, warpQuality=9 ):
-   
+    """Warps a point cloud from source to target grid points.
+
+    Args:
+        xyc: A NumPy array of shape (N, 2) representing the input point cloud.
+        sourceGridPoints: A NumPy array of shape (M, 2) representing the
+            source grid points.
+        targetGridPoints: A NumPy array of shape (M, 2) representing the
+            target grid points.
+        warpQuality: An integer specifying the number of nearest neighbors
+            to consider for warping.
+
+    Returns:
+        A NumPy array of shape (N, 2) representing the warped point cloud.
+    """
     sourceTree = KDTree(sourceGridPoints, leafsize=10)
     warpedXYC = []  
     for c in xyc:
@@ -68,9 +88,31 @@ def warpCloud( xyc, sourceGridPoints, targetGridPoints, warpQuality=9 ):
     return warpedXYC
 
 def getCloudGrid( xyc,autoPerimeterOffset=True,autoPerimeterDensity=True,
-                 width=64, height=64, perimeterSubdivisionSteps=4, paddingScale=1.05, 
+                 width=64, height=64, perimeterSubdivisionSteps=4, paddingScale=1.05,
                  smoothing=0.001, warpQuality=9, perimeterOffset=None ):
-    bounds, densities = getCloudHull(xyc, width=width, height=height, perimeterSubdivisionSteps=perimeterSubdivisionSteps, 
+    """Generates a Coons grid for a given point cloud.
+
+    Args:
+        xyc: A NumPy array of shape (N, 2) representing the input point cloud.
+        autoPerimeterOffset: A boolean indicating whether to automatically
+            determine the perimeter offset.
+        autoPerimeterDensity: A boolean indicating whether to automatically
+            determine the perimeter density.
+        width: An integer specifying the width of the grid.
+        height: An integer specifying the height of the grid.
+        perimeterSubdivisionSteps: An integer specifying the number of
+            subdivision steps for the perimeter.
+        paddingScale: A float specifying the padding scale for the grid.
+        smoothing: A float specifying the smoothing factor for the perimeter.
+        warpQuality: An integer specifying the number of nearest neighbors
+            to consider for warping.
+        perimeterOffset: An integer or None specifying the perimeter offset.
+
+    Returns:
+        A NumPy array of shape (width * height, 2) representing the
+        Coons grid points.
+    """
+    bounds, densities = getCloudHull(xyc, width=width, height=height, perimeterSubdivisionSteps=perimeterSubdivisionSteps,
                     smoothing=smoothing,autoPerimeterOffset=autoPerimeterOffset,
                     perimeterOffset=perimeterOffset,autoPerimeterDensity=autoPerimeterDensity)
 
@@ -78,13 +120,33 @@ def getCloudGrid( xyc,autoPerimeterOffset=True,autoPerimeterDensity=True,
 
 
 def rectifyCloud(xyc,autoPerimeterOffset=True,autoPerimeterDensity=True,
-                 width=64, height=64, 
-                 perimeterSubdivisionSteps=4, paddingScale=1.05, 
+                 width=64, height=64,
+                 perimeterSubdivisionSteps=4, paddingScale=1.05,
                  smoothing=0.001, warpQuality=9, perimeterOffset=None ):
-    
+    """Rectifies a point cloud to a regular grid.
+
+    Args:
+        xyc: A NumPy array of shape (N, 2) representing the input point cloud.
+        autoPerimeterOffset: A boolean indicating whether to automatically
+            determine the perimeter offset.
+        autoPerimeterDensity: A boolean indicating whether to automatically
+            determine the perimeter density.
+        width: An integer specifying the width of the grid.
+        height: An integer specifying the height of the grid.
+        perimeterSubdivisionSteps: An integer specifying the number of
+            subdivision steps for the perimeter.
+        paddingScale: A float specifying the padding scale for the grid.
+        smoothing: A float specifying the smoothing factor for the perimeter.
+        warpQuality: An integer specifying the number of nearest neighbors
+            to consider for warping.
+        perimeterOffset: An integer or None specifying the perimeter offset.
+
+    Returns:
+        A NumPy array of shape (N, 2) representing the rectified point cloud.
+    """
     sourceGridPoints = getCloudGrid( xyc,autoPerimeterOffset=autoPerimeterOffset,autoPerimeterDensity=autoPerimeterDensity,
-                 width=width, height=width, 
-                 perimeterSubdivisionSteps=perimeterSubdivisionSteps, paddingScale=paddingScale, 
+                 width=width, height=width,
+                 perimeterSubdivisionSteps=perimeterSubdivisionSteps, paddingScale=paddingScale,
                  smoothing=smoothing, warpQuality=warpQuality, perimeterOffset=perimeterOffset)
     
     targetGridPoints = []
@@ -97,7 +159,28 @@ def rectifyCloud(xyc,autoPerimeterOffset=True,autoPerimeterDensity=True,
 
 def getCloudHull(xyc,width=64,height=64,perimeterSubdivisionSteps=4,smoothing=0.001,
                  autoPerimeterOffset=True, perimeterOffset=None, autoPerimeterDensity=True):
-    
+    """Calculates the convex hull of a point cloud and its properties.
+
+    Args:
+        xyc: A NumPy array of shape (N, 2) representing the input point cloud.
+        width: An integer specifying the width of the grid.
+        height: An integer specifying the height of the grid.
+        perimeterSubdivisionSteps: An integer specifying the number of
+            subdivision steps for the perimeter.
+        smoothing: A float specifying the smoothing factor for the perimeter splines.
+        autoPerimeterOffset: A boolean indicating whether to automatically
+            determine the perimeter offset.
+        perimeterOffset: An integer or None specifying the perimeter offset.
+        autoPerimeterDensity: A boolean indicating whether to automatically
+            determine the perimeter density.
+
+    Returns:
+        A tuple containing:
+            - bounds: A dictionary containing the smoothed splines for the
+              top, right, bottom, and left boundaries of the hull.
+            - densities: A dictionary containing the density of points along
+              each boundary, or None if autoPerimeterDensity is False.
+    """
     tree = KDTree(xyc, leafsize=10)
 
     hull = ConvexHull(xyc)
@@ -204,11 +287,37 @@ def getCloudHull(xyc,width=64,height=64,perimeterSubdivisionSteps=4,smoothing=0.
     return bounds, densities
 
 def getCircularGrid( fitCloud=None, width=64, height=64, paddingScale=1.0):
+    """Generates a circular Coons grid.
+
+    Args:
+        fitCloud: A NumPy array of shape (N, 2) representing a point cloud
+            to fit the circular grid to, or None to create a default circular grid.
+        width: An integer specifying the width of the grid.
+        height: An integer specifying the height of the grid.
+        paddingScale: A float specifying the padding scale for the grid.
+
+    Returns:
+        A NumPy array of shape (width * height, 2) representing the
+        circular Coons grid points.
+    """
     return getCoonsGrid(getCircularBounds(fitCloud=fitCloud,width=width,height=height),width=width,height=height, paddingScale=paddingScale)
 
 def getCircularBounds(fitCloud=None,width=64,height=64,smoothing=0.01):
+    """Calculates the boundary splines for a circular grid.
+
+    Args:
+        fitCloud: A NumPy array of shape (N, 2) representing a point cloud
+            to fit the circular bounds to, or None for default circular bounds.
+        width: An integer specifying the width of the grid.
+        height: An integer specifying the height of the grid.
+        smoothing: A float specifying the smoothing factor for the boundary splines.
+
+    Returns:
+        A dictionary containing the smoothed splines for the top, right,
+        bottom, and left boundaries of the circular grid.
+    """
     circumference = 2*(width+height)
-    
+
     if not fitCloud is None:
         cx = np.mean(fitCloud[:,0])
         cy = np.mean(fitCloud[:,1])
@@ -238,7 +347,21 @@ def getCircularBounds(fitCloud=None,width=64,height=64,smoothing=0.01):
 
 
 def getCoonsGrid( bounds, width=64, height=64, densities=None, paddingScale=1.0):
-    
+    """Generates a Coons grid from given boundary splines.
+
+    Args:
+        bounds: A dictionary containing the smoothed splines for the
+            top, right, bottom, and left boundaries.
+        width: An integer specifying the width of the grid.
+        height: An integer specifying the height of the grid.
+        densities: A dictionary containing the density of points along
+            each boundary, or None for uniform density.
+        paddingScale: A float specifying the padding scale for the grid.
+
+    Returns:
+        A NumPy array of shape (width * height, 2) representing the
+        Coons grid points.
+    """
     targets = []
     for yi in range(height):
         for xi in range(width):
@@ -254,7 +377,22 @@ def getCoonsGrid( bounds, width=64, height=64, densities=None, paddingScale=1.0)
 
 
 def getCoonsPatchPointBez(bounds,x,y,width,height, densities = None):
-    
+    """Calculates a point on a Coons patch using Bezier interpolation.
+
+    Args:
+        bounds: A dictionary containing the smoothed splines for the
+            top, right, bottom, and left boundaries.
+        x: An integer representing the x-coordinate on the grid.
+        y: An integer representing the y-coordinate on the grid.
+        width: An integer specifying the width of the grid.
+        height: An integer specifying the height of the grid.
+        densities: A dictionary containing the density of points along
+            each boundary, or None for uniform density.
+
+    Returns:
+        A NumPy array of shape (2,) representing the coordinates of the
+        point on the Coons patch.
+    """
     p00 = np.array(interpolate.splev( 0.0,bounds['s_top'])).flatten()
     p10 = np.array(interpolate.splev( 1.0,bounds['s_top'])).flatten()
     p11 = np.array(interpolate.splev( 0.0,bounds['s_bottom'])).flatten()
@@ -290,12 +428,47 @@ def getCoonsPatchPointBez(bounds,x,y,width,height, densities = None):
 
 
 def lerp( p1, p2, t):
+    """Performs linear interpolation between two points.
+
+    Args:
+        p1: A NumPy array representing the first point.
+        p2: A NumPy array representing the second point.
+        t: A float representing the interpolation factor (between 0 and 1).
+
+    Returns:
+        A NumPy array representing the interpolated point.
+    """
     return (1.0-t)*p1+t*p2
 
 def leftOrRight(p,l1,l2):
+    """Determines if a point is to the left or right of a line segment.
+
+    Args:
+        p: A NumPy array representing the point to check.
+        l1: A NumPy array representing the start point of the line segment.
+        l2: A NumPy array representing the end point of the line segment.
+
+    Returns:
+        An integer:
+            - 1 if p is to the left of the line segment.
+            - -1 if p is to the right of the line segment.
+            - 0 if p is collinear with the line segment.
+    """
     return np.sign((l2[0] - l1[0]) * (p[1] - l1[1]) - (l2[1] - l1[1]) * (p[0] - l1[0]))
 
 def getPointOnHull( hullPoints,t, totalLength ):
+    """Gets a point on the convex hull at a given normalized distance.
+
+    Args:
+        hullPoints: A list of NumPy arrays representing the points of the
+            convex hull in order.
+        t: A float representing the normalized distance along the hull
+            perimeter (between 0 and 1).
+        totalLength: A float representing the total length of the hull perimeter.
+
+    Returns:
+        A NumPy array representing the point on the hull.
+    """
     lh = len(hullPoints)
     for j in range(lh+1):
         sideLength = distance.euclidean(hullPoints[j%lh],hullPoints[(j+1)%lh])
