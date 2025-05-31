@@ -250,7 +250,7 @@ def transformPointCloud2D(points2d, target=None, autoAdjustCount=True,
                 gridPoints2d[idx] = np.array(q['grid'][0:2], dtype=float)
 
 
-    return gridPoints2d, (width, height)
+    return gridPoints2d, (width, height), quadrants
 
 
 def sliceQuadrant(quadrant, mask=None, hungarian_threshold=50):
