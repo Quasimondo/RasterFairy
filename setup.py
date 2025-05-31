@@ -66,6 +66,7 @@ setup(
         'numpy >= 1.8.0',
         'scipy >= 0.13.0',
         'moviepy >= 0.2.3.5',
+        'colorsys'
     ],
 
     # List additional groups of dependencies here (e.g. development
