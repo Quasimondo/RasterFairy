@@ -64,13 +64,13 @@ def warpCloud( xyc, sourceGridPoints, targetGridPoints, warpQuality=9 ):
     sourceTree = KDTree(sourceGridPoints, leafsize=10)
     warpedXYC = []  
     for c in xyc:
-        nearestEdge = sourceTree.query(c,k=warpQuality)
+        nearest_points = sourceTree.query(c,k=warpQuality)
         nx = 0.0
         ny = 0.0
         ws = 0.0
         for i in range(warpQuality):
-            p = targetGridPoints[nearestEdge[1][i]]
-            w = nearestEdge[0][i]
+            p = targetGridPoints[nearest_points[1][i]]
+            w = nearest_points[0][i]
             if w == 0.0:
                 nx = p[0]
                 ny = p[1]
@@ -145,7 +145,7 @@ def rectifyCloud(xyc,autoPerimeterOffset=True,autoPerimeterDensity=True,
         A NumPy array of shape (N, 2) representing the rectified point cloud.
     """
     sourceGridPoints = getCloudGrid( xyc,autoPerimeterOffset=autoPerimeterOffset,autoPerimeterDensity=autoPerimeterDensity,
-                 width=width, height=width,
+                 width=width, height=height,
                  perimeterSubdivisionSteps=perimeterSubdivisionSteps, paddingScale=paddingScale,
                  smoothing=smoothing, warpQuality=warpQuality, perimeterOffset=perimeterOffset)
     
@@ -191,13 +191,16 @@ def getCloudHull(xyc,width=64,height=64,perimeterSubdivisionSteps=4,smoothing=0.
         hullPoints.append(xyc[hull.vertices[i]])
 
     for j in range(perimeterSubdivisionSteps):
-        io = 0
+        newPoints = []
         for i in range(len(hullPoints)):
-            index = tree.query(lerp(hullPoints[i+io],hullPoints[(i+1+io)%len(hullPoints)],0.5))[1]
-            if not (index in hullIndices):
-                hullPoints.insert( i+io+1, xyc[index])
+            newPoints.append(hullPoints[i])
+            midpoint = lerp(hullPoints[i], hullPoints[(i+1)%len(hullPoints)], 0.5)
+            index = tree.query(midpoint)[1]
+            if index not in hullIndices:
+                newPoints.append(xyc[index])
                 hullIndices[index] = True
-                io += 1
+        hullPoints = newPoints
+
 
     perimeterLength = 0
     for i in range(len(hullPoints)):
@@ -237,8 +240,8 @@ def getCloudHull(xyc,width=64,height=64,perimeterSubdivisionSteps=4,smoothing=0.
     
     perimeterPoints = np.array(perimeterPoints)
     if perimeterOffset > 0:
-        perimeterPoints[:,0] = np.roll(perimeterPoints[:,0], - perimeterOffset)
-        perimeterPoints[:,1] = np.roll(perimeterPoints[:,1], - perimeterOffset)
+        perimeterPoints = np.roll(perimeterPoints, -perimeterOffset, axis=0)
+
 
     perimeterPoints = np.append(perimeterPoints,[perimeterPoints[0]],axis=0)
 
@@ -421,7 +424,7 @@ def getCoonsPatchPointBez(bounds,x,y,width,height, densities = None):
         
         pu0 = np.array(interpolate.splev( ut,bounds['s_top'])).flatten()
         pu1 = np.array(interpolate.splev(1.0-ub,bounds['s_bottom'])).flatten()
-        pv0 = np.array(interpolate.splev(1-0-vl,bounds['s_left'])).flatten()
+        pv0 = np.array(interpolate.splev(1.0-vl,bounds['s_left'])).flatten()
         pv1 = np.array(interpolate.splev( vr,bounds['s_right'])).flatten()   
         
     return iv * pu0 + v * pu1 + iu * pv0 + u * pv1 - iu * iv * p00 - u * iv * p10 - iu * v * p01 - u * v * p11
@@ -474,6 +477,8 @@ def getPointOnHull( hullPoints,t, totalLength ):
         sideLength = distance.euclidean(hullPoints[j%lh],hullPoints[(j+1)%lh])
         t_sub = sideLength / totalLength;
         if t > t_sub:
-            t-= t_sub;
-        else :
-            return lerp(hullPoints[j%lh],hullPoints[(j+1)%lh], t / t_sub );
+            t-= t_sub
+        else:
+            return lerp(hullPoints[j%lh],hullPoints[(j+1)%lh], t / t_sub )
+
+    return hullPoints[-1]             
