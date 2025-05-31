@@ -49,10 +49,12 @@ were present in the original cloud.
 import numpy as np
 import rasterfairy.prime as prime
 from functools import cmp_to_key
+from scipy.optimize import linear_sum_assignment
 import math
 
 
-def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, proportionThreshold = 0.4):
+def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, 
+                           proportionThreshold = 0.4, hungarian_threshold=200):
     """Transforms a 2D point cloud to a regular raster grid.
 
     This is the main function of the Raster Fairy algorithm. It takes a list of
@@ -171,7 +173,7 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
     failedSlices = 0
     while i < len(quadrants) and len(quadrants) < pointCount:
         if ( len(quadrants[i]['points']) > 1 ):
-            slices = sliceQuadrant(quadrants[i], mask = rasterMask)
+            slices = sliceQuadrant(quadrants[i], mask=rasterMask, hungarian_threshold=hungarian_threshold)
             if len(slices) > 1:
                 del quadrants[i]
                 quadrants += slices
@@ -207,36 +209,31 @@ def transformPointCloud2D( points2d, target = None, autoAdjustCount = True, prop
     return gridPoints2d, (width, height)
 
 
-def sliceQuadrant( quadrant, mask = None ):
+def sliceQuadrant(quadrant, mask=None, hungarian_threshold=50):
     """Slices a quadrant of points into smaller sub-quadrants.
-
-    This function is a core part of the recursive subdivision in the
-    Raster Fairy algorithm. It splits a given quadrant either based on its
-    grid dimensions (if no mask is provided) or based on the distribution
-    of points within a raster mask.
+    
+    Uses Hungarian algorithm for optimal assignment when quadrant is small enough.
 
     Args:
         quadrant: A dictionary representing the quadrant to slice.
-            It should contain:
-            - 'points': NumPy array of 2D points in this quadrant.
-            - 'grid': List [x, y, width, height] defining the grid area.
-            - 'indices': NumPy array of original indices of the points.
-        mask: Optional. A raster mask dictionary (as used in
-            `transformPointCloud2D`). If provided, the slicing will try to
-            balance the number of points in sub-quadrants according to the
-            mask.
+        mask: Optional raster mask dictionary.
+        hungarian_threshold: Maximum number of points to use Hungarian algorithm on.
 
     Returns:
-        A list of dictionaries, where each dictionary represents a
-        new sub-quadrant with the same structure as the input `quadrant`.
-        Returns a list with a single element (the original quadrant) if
-        no effective slice could be made.
+        A list of dictionaries representing new sub-quadrants.
     """
     xy = quadrant['points']
     grid = quadrant['grid']
     indices = quadrant['indices']
+    
+    # If the quadrant is small enough, use Hungarian algorithm
+    if len(xy) <= hungarian_threshold and len(xy) > 1:
+        return hungarianAssignment(quadrant, mask)
+    
+    # Otherwise, use the original recursive slicing method
     slices = []
-        
+    
+    # ... rest of the original sliceQuadrant code ...
     if mask is None:
         
         if grid[2]>1:
@@ -259,19 +256,17 @@ def sliceQuadrant( quadrant, mask = None ):
             order = np.lexsort((xy_int[:, 1], xy_int[:, 0]))
             sliceCount = sliceXCount
             sliceSize  = grid[2] // sliceCount
-            pointsPerSlice = grid[3] * sliceSize
+            pointsPerSlice = int(grid[3] * sliceSize)
             gridOffset = grid[0]
         else:
             xy_int = xy.astype(int)
             order = np.lexsort((xy_int[:, 0], xy_int[:, 1]))
             sliceCount = sliceYCount
             sliceSize = grid[3] // sliceCount
-            pointsPerSlice = grid[2] * sliceSize
+            pointsPerSlice = int(grid[2] * sliceSize)
             gridOffset = grid[1]
         for i in range(sliceCount):
             sliceObject = {}
-            # HOTFIX: indices must be integers!
-            pointsPerSlice = int(pointsPerSlice)
             sliceObject['points'] = xy[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
             if len(sliceObject['points'])>0:
                 sliceObject['indices'] = indices[order[i*pointsPerSlice:(i+1)*pointsPerSlice]]
@@ -284,23 +279,24 @@ def sliceQuadrant( quadrant, mask = None ):
                 slices.append(sliceObject)  
             
     else:
-        
+        # ... rest of the original mask-based slicing code ...
         maskSlice = mask['mask'][grid[1]:grid[1]+grid[3],grid[0]:grid[0]+grid[2]]
-        rows, cols = maskSlice.shape  # Fixed: rows is height, cols is width
+        rows, cols = maskSlice.shape
+        
         pointCountInMask = min(rows*cols - np.sum(maskSlice),len(indices))
         
         if pointCountInMask <= 0:
-            return [quadrant]  # Return original if no valid points
+            return [quadrant]
             
-        columnCounts = rows - np.sum(maskSlice, axis=0)  # Fixed: rows for height
-        splitColumn = countX  = 0
-        while splitColumn < cols and countX < (pointCountInMask>>1):  # Fixed: cols for width
+        columnCounts = rows - np.sum(maskSlice, axis=0)
+        splitColumn = countX = 0
+        while splitColumn < cols and countX < (pointCountInMask>>1):
             countX += columnCounts[splitColumn]
             splitColumn+=1
         
-        rowCounts = cols - np.sum(maskSlice,axis=1)  # Fixed: cols for width
+        rowCounts = cols - np.sum(maskSlice,axis=1)
         splitRow = countY = 0
-        while splitRow < rows and countY < (pointCountInMask>>1):  # Fixed: rows for height
+        while splitRow < rows and countY < (pointCountInMask>>1):
             countY += rowCounts[splitRow]
             splitRow+=1
         
@@ -313,7 +309,6 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceObject['indices'] = indices[newOrder]
             sliceObject['grid'] = [grid[0], grid[1], splitColumn, grid[3]]
             cropGrid(mask['mask'],sliceObject['grid'])
-            # Validate grid after cropping
             if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
                 slicesX.append(sliceObject)    
 
@@ -324,7 +319,6 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceObject['indices'] = indices[newOrder]
             sliceObject['grid'] = [grid[0]+splitColumn, grid[1], grid[2]-splitColumn, grid[3]]
             cropGrid(mask['mask'],sliceObject['grid'])
-            # Validate grid after cropping
             if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
                 slicesX.append(sliceObject)   
         
@@ -337,7 +331,6 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceObject['indices'] = indices[newOrder]
             sliceObject['grid'] = [grid[0], grid[1], grid[2], splitRow]
             cropGrid(mask['mask'],sliceObject['grid'])
-            # Validate grid after cropping
             if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
                 slicesY.append(sliceObject)  
 
@@ -348,11 +341,9 @@ def sliceQuadrant( quadrant, mask = None ):
             sliceObject['indices'] = indices[newOrder]
             sliceObject['grid'] = [grid[0], grid[1]+splitRow, grid[2], grid[3]-splitRow]
             cropGrid(mask['mask'],sliceObject['grid'])
-            # Validate grid after cropping
             if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
                 slicesY.append(sliceObject)   
         
-        # Safe ratio calculation to avoid division by zero
         def safe_ratio(grid_info):
             width = max(grid_info['grid'][2], 1)
             height = max(grid_info['grid'][3], 1)
@@ -360,14 +351,12 @@ def sliceQuadrant( quadrant, mask = None ):
             return ratio if ratio > 0 else 0.01
         
         if len(slicesX) == 0 and len(slicesY) == 0:
-            # No valid slices found, return original
             slices = [quadrant]
         elif len(slicesX) <= 1:
             slices = slicesY if len(slicesY) > 0 else [quadrant]
         elif len(slicesY) <= 1:
             slices = slicesX if len(slicesX) > 0 else [quadrant]
         else:
-            # Compare aspect ratios to choose best slicing direction
             ratio1 = safe_ratio(slicesX[0])
             ratio2 = safe_ratio(slicesX[1]) if len(slicesX) > 1 else ratio1
             ratioX = max(abs(1.0 - ratio1), abs(1.0 - ratio2))
@@ -383,6 +372,129 @@ def sliceQuadrant( quadrant, mask = None ):
              
     return slices
 
+def hungarianAssignment(quadrant, mask=None):
+    """Uses Hungarian algorithm for optimal point-to-grid assignment.
+    
+    Args:
+        quadrant: Dictionary with 'points', 'grid', and 'indices'.
+        mask: Optional raster mask dictionary.
+        
+    Returns:
+        List of individual quadrants with optimal assignments.
+    """
+    
+    xy = quadrant['points']
+    grid = quadrant['grid']
+    indices = quadrant['indices']
+    print(f"applying hungarian assignment for {len(indices)} indices")
+    # Generate all valid grid positions
+    grid_positions = generateGridPositions(grid, mask)
+    
+    # If we have more grid positions than points, select the best subset
+    if len(grid_positions) > len(xy):
+        grid_positions = selectBestGridPositions(xy, grid_positions, len(xy))
+    elif len(grid_positions) < len(xy):
+        # This shouldn't happen with proper grid sizing, but handle gracefully
+        print(f"Warning: Not enough grid positions ({len(grid_positions)}) for points ({len(xy)})")
+        return [quadrant]  # Fall back to original quadrant
+    
+    # Compute cost matrix (Euclidean distances)
+    cost_matrix = computeCostMatrix(xy, grid_positions)
+    
+    # Solve assignment problem
+    row_indices, col_indices = linear_sum_assignment(cost_matrix)
+    
+    # Create individual quadrants for each point
+    result_quadrants = []
+    for i, (point_idx, grid_idx) in enumerate(zip(row_indices, col_indices)):
+        result_quadrants.append({
+            'points': xy[point_idx:point_idx+1],  # Single point
+            'grid': grid_positions[grid_idx] + [1, 1],  # [x, y, width=1, height=1]
+            'indices': indices[point_idx:point_idx+1]  # Single index
+        })
+    
+    return result_quadrants
+
+def generateGridPositions(grid, mask=None):
+    """Generate all valid grid positions within the given grid bounds.
+    
+    Args:
+        grid: List [x, y, width, height] defining the grid area.
+        mask: Optional raster mask dictionary.
+        
+    Returns:
+        List of [x, y] coordinates for valid grid positions.
+    """
+    positions = []
+    
+    if mask is None:
+        # Simple rectangular grid
+        for y in range(grid[1], grid[1] + grid[3]):
+            for x in range(grid[0], grid[0] + grid[2]):
+                positions.append([x, y])
+    else:
+        # Use mask to determine valid positions
+        for y in range(grid[1], min(grid[1] + grid[3], mask['height'])):
+            for x in range(grid[0], min(grid[0] + grid[2], mask['width'])):
+                if y < mask['mask'].shape[0] and x < mask['mask'].shape[1]:
+                    if mask['mask'][y, x] == 0:  # Valid position
+                        positions.append([x, y])
+    
+    return positions
+
+def selectBestGridPositions(points, grid_positions, num_needed):
+    """Select the best subset of grid positions for the given points.
+    
+    This uses a greedy approach to select grid positions that minimize
+    the total distance to the point cloud centroid.
+    
+    Args:
+        points: NumPy array of point coordinates.
+        grid_positions: List of [x, y] grid coordinates.
+        num_needed: Number of grid positions to select.
+        
+    Returns:
+        List of selected [x, y] grid coordinates.
+    """
+    if len(grid_positions) <= num_needed:
+        return grid_positions
+    
+    # Calculate centroid of points
+    centroid = np.mean(points, axis=0)
+    
+    # Calculate distances from each grid position to centroid
+    grid_array = np.array(grid_positions)
+    distances = np.sum((grid_array - centroid) ** 2, axis=1)
+    
+    # Select the closest positions
+    selected_indices = np.argsort(distances)[:num_needed]
+    
+    return [grid_positions[i] for i in selected_indices]
+
+def computeCostMatrix(points, grid_positions):
+    """Compute the cost matrix for assignment (Euclidean distances).
+    
+    Args:
+        points: NumPy array of shape (n, 2) with point coordinates.
+        grid_positions: List of [x, y] grid coordinates.
+        
+    Returns:
+        NumPy array of shape (n, m) with distances between points and grid positions.
+    """
+    n_points = len(points)
+    n_grid = len(grid_positions)
+    
+    cost_matrix = np.zeros((n_points, n_grid))
+    
+    grid_array = np.array(grid_positions)
+    
+    for i, point in enumerate(points):
+        # Calculate Euclidean distances from this point to all grid positions
+        distances = np.sum((grid_array - point) ** 2, axis=1)
+        cost_matrix[i, :] = distances
+    
+    return cost_matrix
+    
 def cropGrid(mask,grid):
     """Adjusts a grid definition to tightly crop around non-masked areas.
 
@@ -905,9 +1017,8 @@ def getBestCircularMatch(n):
     bestr = 0
     bestrp = 0.0
 
-    minr = int(math.sqrt(n / math.pi)) if n > 0 else 1 # ensure minr is at least 1
-    if minr == 0: minr = 1 # ensure minr is at least 1
-
+    minr = max(1, int(math.sqrt(n / math.pi))) 
+    
     for rp_val in range(10): 
         rpf = rp_val/10.0
         for r_val in range(minr,minr+3): 
@@ -989,12 +1100,12 @@ def proportion_sort(item1, item2):
                     0 if equal, 1 if item2 is better.
     """
     # Ensure width and height are not zero to avoid DivisionByZeroError
-    val1 = item1[0] if item1[0] > 0 else 1
-    val2 = item1[1] if item1[1] > 0 else 1
+    val1 = max(item1[0], 1)
+    val2 = max(item1[1], 1)
     ratio1 = min(val1, val2) / max(val1, val2)
 
-    val1 = item2[0] if item2[0] > 0 else 1
-    val2 = item2[1] if item2[1] > 0 else 1
+    val1 = max(item2[0], 1)
+    val2 = max(item2[1], 1)
     ratio2 = min(val1, val2) / max(val1, val2)
 
     # Compare aspect ratios (closer to 1 is better)
