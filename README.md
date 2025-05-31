@@ -35,7 +35,6 @@ To-Do
 -----
 * Add hexagonal circle grid
 * Look into further improving splitting process
-* Add Python 3 support
 
 
 Related Projects
