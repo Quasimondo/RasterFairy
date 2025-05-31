@@ -163,9 +163,30 @@ def main_block():
     display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Grid ({grid_width}x{grid_height})", filename="rasterfairy_circular_grid.png", marker_size=9)
 
 
+    # 9. Get Triangular Arrangement
+    try:
+        #Note that this returns a list even though it is always a single item:
+        triangular_arrangement = rasterfairy.getTriangularArrangement(totalDataPoints)[0]
+        print(f"Triangular arrangement {triangular_arrangement}")
+        target_arrangement = rasterfairy.arrangementToRasterMask(triangular_arrangement)
+        print(f"Target arrangement {target_arrangement}")
+    except ValueError as e:
+        print(f"Error: {e}")
+        return # Exit if no arrangement found
+
+    # 10. Transform Point Cloud to Grid
+    grid_xy, grid_width, grid_height = transform_to_grid(xy, target_arrangement)
+    print(f"Point cloud transformed to a {grid_width}x{grid_height} grid.")
+    print(f"Shape of grid_xy: {grid_xy.shape}")
+
+    # 11. Grid Scatter Plot
+    display_scatter_plot(grid_xy, dataPoints, title=f"RasterFairy Grid ({grid_width}x{grid_height})", filename="rasterfairy_triangular_grid.png", marker_size=9)
+
+
+
 
     print("...RasterFairy standalone demo 1 finished.")
-    print("Output images: tsne_embedding.png, rasterfairy_grid.png, rasterfairy_circular_grid.png")
+    print("Output images: tsne_embedding.png, rasterfairy_grid.png, rasterfairy_circular_grid.png, rasterfairy_triangular_grid.png")
 
 if __name__ == "__main__":
     main_block()
