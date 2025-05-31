@@ -892,41 +892,58 @@ def getCircularArrangement(radius,adjustFactor):
 
     return {'hex':False,'rows':rows_list,'type':'circular'}
 
-def arrangement_sort(item):
-    """Sort key for raster mask arrangements based on aspect ratio.
-
-    Used to sort a list of raster mask dictionaries (output by
-    `arrangementToRasterMask` or `arrangementListToRasterMasks`)
-    so that masks closer to a square shape appear first.
+def arrangement_sort(item1, item2):
+    """Comparison function for sorting raster mask arrangements based on aspect ratio.
 
     Args:
-        item: A raster mask dictionary with 'width' and 'height' keys.
+        item1: A raster mask dictionary with 'width' and 'height' keys.
+        item2: A raster mask dictionary with 'width' and 'height' keys.
 
     Returns:
-        An integer score proportional to the aspect ratio (closer to 1 is higher).
+        An integer: -1 if item1 has a better aspect ratio, 0 if equal, 1 if item2 is better.
     """
-    # Ensure width and height are not zero to avoid DivisionByZeroError
-    width = item['width'] if item['width'] > 0 else 1
-    height = item['height'] if item['height'] > 0 else 1
-    return int(100000000*(abs(float(min(width,height)) / float(max(width,height)))))
+    width1 = item1['width'] if item1['width'] > 0 else 1
+    height1 = item1['height'] if item1['height'] > 0 else 1
+    ratio1 = min(width1, height1) / max(width1, height1)
 
-def proportion_sort(item):
-    """Sort key for (width, height) tuples based on aspect ratio.
+    width2 = item2['width'] if item2['width'] > 0 else 1
+    height2 = item2['height'] if item2['height'] > 0 else 1
+    ratio2 = min(width2, height2) / max(width2, height2)
 
-    Used to sort a list of (width, height) tuples (output by
-    `getRectArrangements`) so that pairs closer to a square shape
-    appear first.
+    if ratio1 > ratio2:
+        return -1
+    elif ratio1 < ratio2:
+        return 1
+    else:
+        return 0
+
+def proportion_sort(item1, item2):
+    """Comparison function for sorting (width, height) tuples based on aspect ratio.
 
     Args:
-        item: A tuple (width, height).
+        item1: A tuple (width, height).
+        item2: A tuple (width, height).
 
     Returns:
-        An integer score proportional to the aspect ratio (closer to 1 is higher).
+        An integer: -1 if item1 has a better (closer to 1) aspect ratio,
+                    0 if equal, 1 if item2 is better.
     """
     # Ensure width and height are not zero to avoid DivisionByZeroError
-    val1 = item[0] if item[0] > 0 else 1
-    val2 = item[1] if item[1] > 0 else 1
-    return int(100000000*(abs(float(min(val1,val2)) / float(max(val1,val2)))))
+    val1 = item1[0] if item1[0] > 0 else 1
+    val2 = item1[1] if item1[1] > 0 else 1
+    ratio1 = min(val1, val2) / max(val1, val2)
+
+    val1 = item2[0] if item2[0] > 0 else 1
+    val2 = item2[1] if item2[1] > 0 else 1
+    ratio2 = min(val1, val2) / max(val1, val2)
+
+    # Compare aspect ratios (closer to 1 is better)
+    if ratio1 > ratio2:
+        return -1  # item1 has a better aspect ratio
+    elif ratio1 < ratio2:
+        return 1   # item2 has a better aspect ratio
+    else:
+        return 0   # equal aspect ratios
 
 def multiplyArray(arr):
     """Calculates the product of all numbers in a list.
