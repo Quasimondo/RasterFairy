@@ -155,7 +155,7 @@ class SwapOptimizer:
 
 
         if self.lastState is None or not continueFromLastState:
-            cells = np.zeros((width, height),dtype=np.int)
+            cells = np.zeros((width, height),dtype=int)
 
 
             ci = {}
