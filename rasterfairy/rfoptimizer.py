@@ -742,80 +742,28 @@ class SwapOptimizer:
         if (dx!=0 and dy!= 0) or (dx==0 and dy == 0) or cols*rows < 2:
             return False
 
-        # Normalize negative shifts to positive shifts from the other direction
-        # This logic seems complex and might not be a standard "shift with wrap"
-        # It appears to define a source block and a destination for that block's contents.
-        # The "temp1" seems to be the content of the area that will be overwritten by the shift.
-        # Then "temp2" (the block to be shifted) is placed, and "temp1" is placed where "temp2" was.
-
-        # Store original indices and values of the block to be moved
-        source_block_indices = []
-        source_block_values = []
-        for r_offset in range(rows):
-            for c_offset in range(cols):
-                src_idx = cells[tlx + c_offset][tly + r_offset]
-                source_block_indices.append(src_idx)
-                source_block_values.append(d[src_idx])
-
-        # Store original indices and values of the block that will be overwritten by the move
-        target_block_indices = []
-        target_block_values = []
-        for r_offset in range(rows):
-            for c_offset in range(cols):
-                # Check bounds for target block
-                target_x, target_y = tlx + c_offset + dx, tly + r_offset + dy
-                if not (0 <= target_x < width and 0 <= target_y < height):
-                    return False # Shift would go out of bounds
-                tgt_idx = cells[target_x][target_y]
-                target_block_indices.append(tgt_idx)
-                target_block_values.append(d[tgt_idx])
-
-        # Perform the shift: place source_block_values into target_block_indices
-        for i in range(len(target_block_indices)):
-            d[target_block_indices[i]] = source_block_values[i]
-
-        # Fill the original source_block_indices with target_block_values (the wrapped part)
-        # This step is what makes it a "shift" rather than a simple "move" or "copy"
-        # However, the original logic for temp1/temp2 was more specific about which part wraps.
-        # The current logic effectively swaps the contents of two blocks if they don't overlap.
-        # If they overlap, it's more complex.
-        # For a true cyclic shift, elements pushed out one side reappear on the other.
-        # The original code's handling of dx<0 and dy<0 by redefining tlx,cols,dx etc.
-        # was an attempt to simplify this, but let's try a direct approach for clarity.
-
-        # This simplified version just swaps the values if the areas are distinct.
-        # A true cyclic shift is more complex. Given the original structure,
-        # it seems like it was trying to implement a specific type of area swap.
-        # Let's stick to the observed behavior of swapping values in two regions.
-        # The original logic for `temp1` and `temp2` and how they are written back
-        # needs careful re-evaluation if a true cyclic block shift is intended.
-        # For now, this re-implements the swapping of two blocks' contents.
-
-        # If the blocks are the same, no operation needed (already handled by dx=0, dy=0 check)
-        # If blocks overlap, this simple swap is not correct for a "shift".
-        # The original code's conditions for `temp1` and `temp2` suggest a more
-        # specific type of shift where a part of the grid is moved, and the
-        # space it occupied is filled by a specific other part of the grid.
-
-        # Reverting to a structure closer to original to capture its intent,
-        # assuming it's a specific kind of regional swap/shift.
-
         # Check bounds for the source block itself
-        if not (0 <= tlx < width and 0 <= tly < height and \
-                0 <= tlx + cols -1 < width and 0 <= tly + rows -1 < height):
+        if not (0 <= tlx and 0 <= tly and \
+                tlx + cols <= width and tly + rows <= height):
             return False
+        
         # Check bounds for the destination of the block
-        if not (0 <= tlx + dx < width and 0 <= tly + dy < height and \
-                0 <= tlx + dx + cols -1 < width and 0 <= tly + dy + rows -1 < height):
+        if not (0 <= tlx + dx and 0 <= tly + dy and \
+                tlx + dx + cols <= width and tly + dy + rows <= height):
             return False
-
 
         # Values of the block that will be moved
-        block_to_move_values = np.array([d[cells[tlx+c][tly+r]] for r in range(rows) for c in range(cols)])
+        block_to_move_values = []
+        for r in range(rows):
+            for c in range(cols):
+                block_to_move_values.append(d[cells[tlx+c][tly+r]])
 
         # Values of the area that the block_to_move will overwrite
         # These are the values that will effectively "wrap around" or fill the vacated space
-        area_to_be_overwritten_values = np.array([d[cells[tlx+dx+c][tly+dy+r]] for r in range(rows) for c in range(cols)])
+        area_to_be_overwritten_values = []
+        for r in range(rows):
+            for c in range(cols):
+                area_to_be_overwritten_values.append(d[cells[tlx+dx+c][tly+dy+r]])
 
         # Place block_to_move_values into the new location
         idx = 0
