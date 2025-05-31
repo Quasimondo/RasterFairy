@@ -6,7 +6,7 @@ The purpose of Raster Fairy is to transform any kind of 2D point cloud into a re
 
 Requirements
 ------------
-* Python 2.7 and Python 3
+* Python 3
 * [numpy](numpy.scipy.org) > =1.7.1
 * [scipy](www.scipy.org) - only for coonswarp and rfoptimizer
 
