@@ -51,6 +51,8 @@ def generate_color_harmonies(n_colors, harmony_type="tetradic"):
         hues = [(base_hue + i*0.083) % 1.0 for i in range(-2, 3)]
     elif harmony_type == "tetradic":
         hues = [(base_hue + i*0.25) % 1.0 for i in range(4)]
+    elif harmony_type == "rainbow":
+        hues = [(base_hue + i*(1.0/16.0)) % 1.0 for i in range(16)]
 
     for _ in range(n_colors):
         hue = np.random.choice(hues)
@@ -72,7 +74,7 @@ def generate_data():
     - totalDataPoints (int): The number of data points generated.
     """
     totalDataPoints = 4900 # Corresponds to a 70x70 grid
-    dataPoints = generate_color_harmonies(totalDataPoints, "tetradic")
+    dataPoints = generate_color_harmonies(totalDataPoints, "rainbow")
     # Create a t-SNE embedding in 2D.
     # random_state is set for reproducibility.
     xy = TSNE(n_components=2, random_state=42, perplexity=30, n_iter=1000).fit_transform(dataPoints)
@@ -154,7 +156,7 @@ def main_block():
     # 5. Grid Scatter Plot (Initial RasterFairy assignment)
     # Shows the points assigned to grid cells, colored by their original 'dataPoints' color.
     # This is the state *before* SwapOptimizer is used.
-    display_scatter_plot(grid_xy, dataPoints, title=f"Initial RasterFairy Grid ({width}x{height}) (Swap Opt)", filename="rasterfairy_grid_initial_swap_opt.png", marker_size=9)
+    display_scatter_plot(grid_xy, dataPoints, title=f"Initial RasterFairy Grid ({width}x{height}) (Swap Opt)", filename="rasterfairy_grid_opt_01_initial_swap.png", marker_size=9)
 
     # --- Swap Optimization Steps ---
     print("\n--- Starting Swap Optimization Steps ---")
@@ -182,7 +184,7 @@ def main_block():
     # The colors 'dataPoints' remain fixed but are now plotted at new grid locations.
     print("\nApplying swap table and plotting optimized grid...")
     optimized_xy = grid_xy[swapTable]
-    display_scatter_plot(optimized_xy, dataPoints, title=f"Optimized RasterFairy Grid ({width}x{height}, {iterations} iter) (Swap Opt)", filename="rasterfairy_grid_optimized_swap_opt.png", marker_size=9)
+    display_scatter_plot(optimized_xy, dataPoints, title=f"Optimized RasterFairy Grid ({width}x{height}, {iterations} iter) (Swap Opt)", filename="rasterfairy_grid_opt_02_optimized_swap.png", marker_size=9)
 
     # 9. Continue Optimization
     # Further optimize from the current state.
@@ -194,7 +196,7 @@ def main_block():
     print("\nApplying new swap table and plotting continued optimized grid...")
     continued_optimized_xy = grid_xy[swapTable]
     total_iterations_after_continue = iterations + continue_iterations
-    display_scatter_plot(continued_optimized_xy, dataPoints, title=f"Continued Optimization ({width}x{height}, {total_iterations_after_continue} total iter) (Swap Opt)", filename="rasterfairy_grid_continued_swap_opt.png", marker_size=9)
+    display_scatter_plot(continued_optimized_xy, dataPoints, title=f"Continued Optimization ({width}x{height}, {total_iterations_after_continue} total iter) (Swap Opt)", filename="rasterfairy_grid_opt_03_continued_swap.png", marker_size=9)
 
     # 11. Optimization with Shaking
     # 'shakeIterations' introduces perturbations during optimization,
@@ -208,7 +210,7 @@ def main_block():
     print("\nApplying new swap table and plotting shaken optimized grid...")
     shaken_optimized_xy = grid_xy[swapTable]
     total_iterations_after_shake = total_iterations_after_continue + shake_iterations_additional
-    display_scatter_plot(shaken_optimized_xy, dataPoints, title=f"Optimization with Shaking ({width}x{height}, {total_iterations_after_shake} total iter, shake={shake_amount}) (Swap Opt)", filename="rasterfairy_grid_shaken_swap_opt.png", marker_size=9)
+    display_scatter_plot(shaken_optimized_xy, dataPoints, title=f"Optimization with Shaking ({width}x{height}, {total_iterations_after_shake} total iter, shake={shake_amount}) (Swap Opt)", filename="rasterfairy_grid_opt_04_shaken_swap.png", marker_size=9)
 
     # --- Optimization from Random Start ---
     print("\n--- Starting Optimization from Random Arrangement ---")
@@ -221,7 +223,7 @@ def main_block():
     np.random.shuffle(swapTable)
     shuffled_grid_for_opt = grid_xy[swapTable] # Apply this shuffled assignment for visualization
     # Display the shuffled grid - this is the starting point for the next optimization.
-    display_scatter_plot(shuffled_grid_for_opt, dataPoints, title=f"Shuffled Grid (Random Start Point) ({width}x{height}) (Swap Opt)", filename="rasterfairy_grid_shuffled_for_random_opt.png", marker_size=9)
+    display_scatter_plot(shuffled_grid_for_opt, dataPoints, title=f"Shuffled Grid (Random Start Point) ({width}x{height}) (Swap Opt)", filename="rasterfairy_grid_opt_05_shuffled_for_random.png", marker_size=9)
 
     # 14. Initialize a New Optimizer for Random Start
     # Using a new optimizer instance ensures a fresh state (e.g., no learned parameters from previous runs).
@@ -229,7 +231,7 @@ def main_block():
     random_start_optimizer = rfoptimizer.SwapOptimizer()
 
     # 15. Run Optimization from Random Arrangement
-    random_start_iterations = 100000
+    random_start_iterations = 500000
     print(f"\nRunning optimization from random start for {random_start_iterations} iterations...")
     # Provide the shuffled 'swapTable' as the initial state for the optimization.
     final_swapTable_random = random_start_optimizer.optimize(xy, grid_xy, width, height, random_start_iterations, swapTable=swapTable)
@@ -237,7 +239,7 @@ def main_block():
     # 16. Apply Final SwapTable and Plot
     print("\nApplying final swap table from random start optimization and plotting...")
     final_optimized_xy_random = grid_xy[final_swapTable_random]
-    display_scatter_plot(final_optimized_xy_random, dataPoints, title=f"Optimized from Random Start ({width}x{height}, {random_start_iterations} iter) (Swap Opt)", filename="rasterfairy_grid_random_start_swap_opt.png", marker_size=9)
+    display_scatter_plot(final_optimized_xy_random, dataPoints, title=f"Optimized from Random Start ({width}x{height}, {random_start_iterations} iter) (Swap Opt)", filename="rasterfairy_grid_opt_06_random_start_swap.png", marker_size=9)
 
     print("\n...random swap optimization standalone demo finished.")
     print("All output images:")
