@@ -39,23 +39,50 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+"""
+This module provides utility classes and functions for working with prime numbers
+and permutations.
+"""
+
 import math
 
 class PrimeNumber():
+    """Represents a node in a linked list of prime numbers."""
     def __init__(self,n):
+        """Initializes a PrimeNumber object.
+
+        Args:
+            n: An integer representing the prime number.
+        """
         self.n = n
         self.nextPrime = None
     
     def setNext(self,n):
+        """Sets the next prime number in the linked list.
+
+        Args:
+            n: An integer representing the next prime number.
+
+        Returns:
+            A new PrimeNumber object representing the next prime.
+        """
         self.nextPrime = PrimeNumber(n)
         return self.nextPrime
     
 class Prime():
-    
+    """Provides methods for prime number generation, factorization, and permutations."""
     firstPrime = PrimeNumber(2)
     lastPrime = firstPrime.setNext(3).setNext(5).setNext(7)
 
-    def getPrimeFactors(self,n): 
+    def getPrimeFactors(self,n):
+        """Calculates the prime factors of a given integer.
+
+        Args:
+            n: An integer for which to find prime factors.
+
+        Returns:
+            A list of integers representing the prime factors of n.
+        """
         result = []
         factor = 2
         while n > 1:
@@ -68,6 +95,19 @@ class Prime():
         return result
 
     def isPrime(self,n):
+        """Checks if a given integer is a prime number.
+
+        This method uses a combination of trial division by small primes
+        and then checks divisibility by subsequent odd numbers up to the
+        square root of n. It also maintains a linked list of primes found
+        so far to speed up checks for larger numbers.
+
+        Args:
+            n: An integer to check for primality.
+
+        Returns:
+            True if n is a prime number, False otherwise.
+        """
         if (n & 1) == 0 or (n > 5 and n % 5 == 0):
             return False
 
@@ -97,6 +137,14 @@ class Prime():
         return True
     
     def nextPrime(self,n):
+        """Finds the next prime number greater than or equal to n.
+
+        Args:
+            n: An integer from which to start searching for the next prime.
+
+        Returns:
+            An integer representing the next prime number.
+        """
         n += (n&1)+1
         if self.lastPrime.n > n:
             p = self.firstPrime
@@ -110,6 +158,20 @@ class Prime():
         return n
     
     def getPermutations(self,symbols):
+        """Generates all unique permutations of a list of symbols.
+
+        If the number of symbols is less than 10, it generates all
+        permutations directly. Otherwise, if there are repeated symbols,
+        it groups them and generates permutations of the groups to
+        avoid memory issues.
+
+        Args:
+            symbols: A list of items (symbols) to permute.
+
+        Returns:
+            A list of tuples, where each tuple is a unique permutation
+            of the input symbols.
+        """
         if len(symbols) < 10:
             n = self.factorial(len(symbols))
             if n==1:
@@ -146,7 +208,15 @@ class Prime():
 
         return perm
     
-    def factorial(self,n): 
+    def factorial(self,n):
+        """Calculates the factorial of a non-negative integer.
+
+        Args:
+            n: A non-negative integer.
+
+        Returns:
+            The factorial of n (n!).
+        """
         r = 1
         while n > 1:
             r *= n
@@ -154,10 +224,33 @@ class Prime():
         return r
     
     def getNthPermutation(self,symbols, n):
+        """Generates the nth lexicographical permutation of a list of symbols.
+
+        Args:
+            symbols: A list of items (symbols) to permute.
+            n: An integer representing the index (0-based) of the
+               desired permutation.
+
+        Returns:
+            A tuple representing the nth permutation of the symbols.
+        """
         return self.permutation(symbols, self.n_to_factoradic(n))
 
 
     def n_to_factoradic(self,n, p = 2):
+        """Converts a non-negative integer to its factoradic representation.
+
+        The factoradic representation is a sequence of digits where the
+        ith digit (from the right, 0-indexed) is less than or equal to i.
+        It's used in algorithms for generating permutations.
+
+        Args:
+            n: A non-negative integer to convert.
+            p: An integer used internally for recursion (default is 2).
+
+        Returns:
+            A list of integers representing the factoradic of n.
+        """
         if n < p:
             return [n]
         ret = self.n_to_factoradic((n // p) | 0, p + 1)
@@ -166,8 +259,19 @@ class Prime():
     
     
     def permutation(self, symbols, factoradic):
+        """Generates a permutation of symbols based on its factoradic representation.
+
+        Args:
+            symbols: A list of items (symbols) to permute.
+            factoradic: A list of integers representing the factoradic
+                        of the desired permutation index.
+
+        Returns:
+            A tuple representing the permutation corresponding to the
+            given factoradic.
+        """
         factoradic.append(0)
-        while len(factoradic) < len(symbols): 
+        while len(factoradic) < len(symbols):
             factoradic = [0] + factoradic
         ret = []
         s = symbols[:]
