@@ -30,10 +30,12 @@ import rasterfairy
 grid_xy = rasterfairy.transformPointCloud2D(xy)
 #grid_xy will contain the points in the same order but aligned to a grid
 ```
+Issues
+-----
+* Sometimes the subdivision algorithm fails in strange ways and creates a sub-optimal arrangment. In cases like that a pre-processing of the incoming xy coordinates via coonswarp.rectifyCloud is often able to fix it. Alternatively picking a different column/row arrangement can also help.
 
 To-Do
 -----
-* Add hexagonal circle grid
 * Look into further improving splitting process
 
 
