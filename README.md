@@ -3,6 +3,12 @@ The purpose of Raster Fairy is to transform any kind of 2D point cloud into a re
 
 ![](http://i.imgur.com/HWOsmGC.gif)
 
+Example Input Arrangment TSNE:
+![](https://i.imgur.com/5um2xVS.jpeg)
+Example Output Arrangment RasterFairy:
+![](https://i.imgur.com/lhZkeWe.jpeg)
+
+
 
 Requirements
 ------------
