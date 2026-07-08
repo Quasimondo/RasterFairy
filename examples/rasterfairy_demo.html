@@ -40,11 +40,16 @@
   .opts button:hover{color:var(--ink)}
   .opts button:focus-visible{outline:1px solid var(--ink); outline-offset:1px}
   .opts button[aria-pressed="true"]{color:var(--bg); background:var(--ink); border-color:var(--ink)}
-  #textmask{
+  #textmask, #customCount{
     width:100%; margin-top:7px; font:inherit; color:var(--ink); background:var(--bg);
-    border:1px solid var(--line); padding:5px 8px; border-radius:2px; display:none;
+    border:1px solid var(--line); padding:5px 8px; border-radius:2px;
   }
-  #textmask:focus-visible{outline:1px solid var(--ink)}
+  #textmask{display:none}
+  #customCount::placeholder{color:var(--dim)}
+  #customCount{appearance:textfield; -moz-appearance:textfield}
+  #customCount::-webkit-outer-spin-button, #customCount::-webkit-inner-spin-button{
+    -webkit-appearance:none; margin:0}
+  #textmask:focus-visible, #customCount:focus-visible{outline:1px solid var(--ink)}
   .actions{display:flex; gap:6px}
   .actions button{
     flex:1; font:inherit; background:none; color:var(--ink); border:1px solid var(--dim);
@@ -101,6 +106,8 @@
         <button data-v="2048">2048</button>
         <button data-v="4096">4096</button>
       </div>
+      <input id="customCount" type="number" min="16" max="8192" step="1"
+             placeholder="custom (16–8192)" aria-label="Custom point count">
     </div>
 
     <div class="group">
@@ -127,6 +134,7 @@
         <tr><td>transform</td><td id="roT">–</td></tr>
         <tr><td>kNN kept (k=8)</td><td id="roKnn">–</td></tr>
       </table>
+      <div id="roNote" style="display:none; margin-top:6px; font-size:11px"></div>
     </div>
   </div>
 
@@ -259,6 +267,10 @@ function makeRect(n,mode){
   if(mode==='auto'){
     const r=rectArrangement(n);
     if(r && r[0]/r[1]>=0.4) return {w:r[1],h:r[0],free:new Uint8Array(r[0]*r[1]).fill(1),hex:false};
+    const m=fullMask(Math.ceil(Math.sqrt(n)),Math.ceil(n/Math.ceil(Math.sqrt(n))),n);
+    m.note = r && r[0]>1 ? `best exact rect ${r[1]}×${r[0]} too elongated`
+                         : `${n} is prime — no exact rect`;
+    return m;
   }
   const w=Math.ceil(Math.sqrt(n)), h=Math.ceil(n/w);
   return fullMask(w,h,n);
@@ -480,6 +492,23 @@ function wireOpts(id,key){
   });
 }
 wireOpts('cloudOpts','cloud'); wireOpts('countOpts','count'); wireOpts('targetOpts','target');
+
+const customCount=$('customCount');
+customCount.onchange=()=>{
+  let v=Math.round(+customCount.value);
+  if(!isFinite(v))return;
+  v=Math.min(8192,Math.max(16,v));
+  customCount.value=v;
+  cfg.count=v;
+  // deselect presets unless the custom value happens to match one
+  $('countOpts').querySelectorAll('button').forEach(b=>
+    b.setAttribute('aria-pressed', +b.dataset.v===v));
+  run();
+};
+// preset clicks clear the custom field
+$('countOpts').querySelectorAll('button').forEach(b=>
+  b.addEventListener('click',()=>{customCount.value='';}));
+
 $('textmask').onchange=()=>{cfg.text=$('textmask').value; if(cfg.target==='text')run();};
 $('reseedBtn').onclick=()=>{seed=(Math.random()*1e9)|0; run();};
 $('morphBtn').onclick=()=>{
@@ -508,7 +537,11 @@ function run(){
   $('roN').textContent=cfg.count;
   let freeCount=0; mask.free.forEach(v=>freeCount+=v);
   $('roGrid').textContent=(cfg.target==='auto'||cfg.target==='square')
-      ? mask.w+'×'+mask.h : mask.w+'×'+mask.h+' mask';
+      ? mask.w+'×'+mask.h+(mask.note?' *':'') : mask.w+'×'+mask.h+' mask';
+  $('roGrid').title=mask.note||'';
+  const noteRow=$('roNote');
+  noteRow.textContent=mask.note?('* '+mask.note):'';
+  noteRow.style.display=mask.note?'block':'none';
   $('roT').textContent=dt.toFixed(1)+' ms';
   $('roKnn').textContent='…';
   knnPreservation(state.cloud,state.grid,v=>{
