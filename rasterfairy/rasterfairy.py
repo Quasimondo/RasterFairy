@@ -47,7 +47,6 @@ were present in the original cloud.
 """
 
 import numpy as np
-import rasterfairy.prime as prime
 from functools import cmp_to_key
 from scipy.optimize import linear_sum_assignment
 import math
@@ -212,7 +211,16 @@ def transformPointCloud2D(points2d, target=None, autoAdjustCount=True,
             
             
         
-    quadrants = [{'points':points2d, 'grid':[0,0,width,height], 'indices':np.arange(pointCount)}]
+    # Normalize points into grid coordinate space. Slicing order and the
+    # Hungarian cost are otherwise scale-dependent: inputs in a small range
+    # (e.g. [0,1]) collapse under integer quantization and produce garbage.
+    p = points2d.astype(float)
+    p -= p.min(axis=0)
+    span = p.max(axis=0)
+    span[span == 0] = 1.0
+    workPoints = p / span * np.array([width - 1, height - 1], dtype=float)
+
+    quadrants = [{'points':workPoints, 'grid':[0,0,width,height], 'indices':np.arange(pointCount)}]
     i = 0
     failedSlices = 0
     while i < len(quadrants) and len(quadrants) < pointCount:
@@ -296,15 +304,13 @@ def sliceQuadrant(quadrant, mask=None, hungarian_threshold=50):
         
         splitX = (sliceXCount<sliceYCount or (sliceXCount==sliceYCount and grid[2]>grid[3]))
         if splitX:
-            xy_int = xy.astype(int)
-            order = np.lexsort((xy_int[:, 1], xy_int[:, 0]))
+            order = np.lexsort((xy[:, 1], xy[:, 0]))
             sliceCount = sliceXCount
             sliceSize  = grid[2] // sliceCount
             pointsPerSlice = int(grid[3] * sliceSize)
             gridOffset = grid[0]
         else:
-            xy_int = xy.astype(int)
-            order = np.lexsort((xy_int[:, 0], xy_int[:, 1]))
+            order = np.lexsort((xy[:, 0], xy[:, 1]))
             sliceCount = sliceYCount
             sliceSize = grid[3] // sliceCount
             pointsPerSlice = int(grid[2] * sliceSize)
@@ -344,7 +350,7 @@ def sliceQuadrant(quadrant, mask=None, hungarian_threshold=50):
             countY += rowCounts[splitRow]
             splitRow+=1
         
-        order = np.lexsort((xy[:,1].astype(int),xy[:,0].astype(int)))
+        order = np.lexsort((xy[:,1],xy[:,0]))
         slicesX = []
         if countX > 0:
             sliceObject = {} 
@@ -366,7 +372,7 @@ def sliceQuadrant(quadrant, mask=None, hungarian_threshold=50):
             if sliceObject['grid'][2] > 0 and sliceObject['grid'][3] > 0:
                 slicesX.append(sliceObject)   
         
-        order = np.lexsort((xy[:,0].astype(int),xy[:,1].astype(int)))
+        order = np.lexsort((xy[:,0],xy[:,1]))
         slicesY = []
         if countY > 0:
             sliceObject = {} 
@@ -725,22 +731,13 @@ def getRectArrangements(n):
     """
     if n <= 0:
         return []
-    p_instance = prime.Prime() # Use a different variable name
-    f = p_instance.getPrimeFactors(n)
-    f_count = len(f)
-    ma = multiplyArray(f)
-    arrangements = set([(1,ma)])
-
-    if (f_count > 1):
-        perms = set(p_instance.getPermutations(f)) # Use the new variable name
-        for perm_val in perms: # Use a different variable name
-            for i in range(1,f_count):
-                v1 = multiplyArray(perm_val[0:i])
-                v2 = multiplyArray(perm_val[i:])
-                arrangements.add((min(v1, v2),max(v1, v2)))
-
-
-    return sorted(list(arrangements), key=cmp_to_key(proportion_sort), reverse=False)
+    # All rectangular arrangements of n are exactly the divisor pairs of n.
+    # A simple O(sqrt(n)) scan replaces the previous enumeration of prime
+    # factor permutations, which was factorial in the number of prime
+    # factors (n = 4096 alone meant 12! candidate permutations).
+    arrangements = [(d, n // d) for d in range(1, math.isqrt(n) + 1) if n % d == 0]
+    # Sort by aspect ratio, closest to square first (same order as before).
+    return sorted(arrangements, key=lambda p: p[0] / p[1], reverse=True)
 
 def getShiftedAlternatingRectArrangements(n):
     """Generates arrangements for hexagonal grids with alternating row lengths (shifted).

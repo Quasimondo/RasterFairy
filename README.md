@@ -9,6 +9,10 @@ Example Output Arrangment RasterFairy:
 ![](https://i.imgur.com/lhZkeWe.jpeg)
 
 
+Why RasterFairy?
+-----
+Why not just use the Hungarian algorithm? Mapping a point cloud to a grid is a linear assignment problem, and solvers like the Hungarian or Jonker-Volgenant algorithm find the provably optimal assignment. The catch is cost: solving it exactly is roughly O(n³) with an n×n cost matrix, which means about 30 seconds and a lot of RAM for 4,096 points and practical infeasibility beyond ~10,000. RasterFairy's recursive slicing is a heuristic, but a good one — in benchmarks it stays within a few percent of the exact solution on neighborhood preservation while running about 200× faster, and it keeps working at sizes where exact solvers give up. Space-filling-curve tricks (sorting both cloud and grid along a Hilbert curve) are faster still but noticeably worse, since curve locality only preserves neighborhoods in one direction. If you don't have a 2D layout to preserve and just want images arranged by feature similarity, a different tool fits better: methods like FLAS (Barthel et al. 2023) sort high-dimensional vectors onto a grid directly, skipping the projection step entirely. RasterFairy is for the case where the 2D arrangement itself — a t-SNE or UMAP embedding, or any layout you care about — is the thing you want to keep.
+
 
 Requirements
 ------------
@@ -39,6 +43,13 @@ grid_xy = rasterfairy.transformPointCloud2D(xy)
 Issues
 -----
 * Sometimes the subdivision algorithm fails in strange ways and creates a sub-optimal arrangment. In cases like that a pre-processing of the incoming xy coordinates via coonswarp.rectifyCloud is often able to fix it. Alternatively picking a different column/row arrangement can also help.
+
+Recent Changes
+-----
+* Input point clouds are now normalized into the grid coordinate space internally, so inputs at any scale work correctly. Previously, small-range inputs (e.g. normalized coordinates in `[0,1]`) collapsed under integer quantization and produced garbage grids.
+* Slicing now sorts on the true floating-point coordinates instead of prematurely rounding them to integers, improving neighborhood preservation.
+* Grid arrangement computation is now O(√n) (a simple divisor scan) instead of factorial in the number of prime factors, which greatly speeds up large point counts (e.g. n = 4096).
+* Removed the internal `rasterfairy.prime` module, which is no longer needed.
 
 To-Do
 -----

@@ -29,7 +29,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import rasterfairy
 from rasterfairy import coonswarp
-from rasterfairy import prime # Added based on user feedback
 import os
 
 def generate_data():
