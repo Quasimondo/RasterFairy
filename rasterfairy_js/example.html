@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RasterFairy JS — minimal example</title>
+<style>
+  body{font:14px system-ui,sans-serif; margin:0; background:#0d0e11; color:#e8e6e0}
+  header{padding:12px 16px; border-bottom:1px solid #24262d}
+  header a{color:#e8e6e0}
+  canvas{display:block; width:100%; height:calc(100vh - 52px)}
+  code{background:#131419; padding:1px 5px; border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  A cloud (<code>makeCloud</code>) mapped to a grid with
+  <code>transformPointCloud2D</code>. Source in
+  <a href="rasterfairy.js">rasterfairy.js</a>.
+</header>
+<canvas id="c"></canvas>
+
+<!--
+  ES-module imports only work when this file is SERVED over http(s), not opened
+  via file://. From this folder run e.g.:  python3 -m http.server
+  then visit  http://localhost:8000/rasterfairy_js/example.html
+-->
+<script type="module">
+import { transformPointCloud2D, makeCircle } from './rasterfairy.js';
+
+const N = 1024;
+
+// a little sample cloud (two blobs) — your real input would be a t-SNE/UMAP layout
+const pts = [];
+for (let i = 0; i < N; i++) {
+  const cx = i % 2 ? 6 : -6;
+  pts.push([cx + (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 16]);
+}
+
+const mask = makeCircle(N);            // target: a disc holding exactly N cells
+const grid = transformPointCloud2D(pts, mask);   // -> [[gx,gy], ...] in input order
+
+// --- draw both, side by side ---
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+function fit(getPt, n) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < n; i++) { const [x, y] = getPt(i);
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  return [x0, y0, Math.max(x1 - x0, 1e-9), Math.max(y1 - y0, 1e-9)];
+}
+function render() {
+  const dpr = devicePixelRatio || 1;
+  cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const halfW = cv.width / 2, pad = Math.min(halfW, cv.height) * 0.1;
+  const panels = [
+    { getPt: i => pts[i], ox: 0 },
+    { getPt: i => grid[i], ox: halfW },
+  ];
+  for (const { getPt, ox } of panels) {
+    const b = fit(getPt, N);
+    const s = Math.min((halfW - 2 * pad) / b[2], (cv.height - 2 * pad) / b[3]);
+    for (let i = 0; i < N; i++) {
+      const [x, y] = getPt(i);
+      const hue = ((pts[i][0] + 12) / 24 * 300) | 0;
+      ctx.fillStyle = `hsl(${hue} 80% 60%)`;
+      ctx.fillRect(ox + pad + (x - b[0]) * s, pad + (y - b[1]) * s, 3, 3);
+    }
+  }
+}
+render();
+addEventListener('resize', render);
+</script>
+</body>
+</html>

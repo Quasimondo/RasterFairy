@@ -3,6 +3,8 @@ The purpose of Raster Fairy is to transform any kind of 2D point cloud into a re
 
 **[▶ Live interactive demo](https://quasimondo.github.io/RasterFairy/examples/rasterfairy_demo.html)** — runs entirely in your browser, no install.
 
+There is also a dependency-free **JavaScript port** for use in the browser or Node — see [`rasterfairy_js/`](rasterfairy_js/).
+
 ![](http://i.imgur.com/HWOsmGC.gif)
 
 Example Input Arrangment TSNE:
