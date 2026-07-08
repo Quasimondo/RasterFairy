@@ -42,7 +42,7 @@ grid_xy = rasterfairy.transformPointCloud2D(xy)
 ```
 Issues
 -----
-* Sometimes the subdivision algorithm fails in strange ways and creates a sub-optimal arrangment. In cases like that a pre-processing of the incoming xy coordinates via coonswarp.rectifyCloud is often able to fix it. Alternatively picking a different column/row arrangement can also help.
+Earlier versions could silently produce scrambled arrangements when the input coordinates covered a small numeric range (e.g. normalized to [0,1]): the slicing order was computed on integer-truncated coordinates, so clouds spanning only a few integer units collapsed into a handful of buckets and the sort order became effectively random. Input is now normalized internally, so the result is independent of the coordinate scale. The subdivision remains a heuristic, so unusual density distributions may still produce sub-optimal (though no longer erratic) results — trying a different width/height arrangement can help in such cases.
 
 Recent Changes
 -----
