@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RasterFairy — point cloud to grid, live</title>
+<style>
+  :root{
+    --bg:#0d0e11; --panel:#131419; --ink:#e8e6e0; --dim:#7a7d86; --line:#24262d;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--mono);
+    font-size:13px; line-height:1.5; display:flex; flex-direction:column;
+  }
+  header{
+    display:flex; align-items:baseline; gap:1.2em; flex-wrap:wrap;
+    padding:14px 20px; border-bottom:1px solid var(--line);
+  }
+  header h1{font-size:15px; font-weight:600; letter-spacing:.04em}
+  header .sub{color:var(--dim)}
+  header a{color:var(--ink); text-decoration:none; border-bottom:1px solid var(--dim); margin-left:auto}
+  header a:hover, header a:focus-visible{border-bottom-color:var(--ink)}
+  main{flex:1; display:flex; min-height:0}
+  #rail{
+    width:248px; flex:none; border-right:1px solid var(--line); background:var(--panel);
+    padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:18px;
+  }
+  .group label.head{
+    display:block; color:var(--dim); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; margin-bottom:7px;
+  }
+  .opts{display:flex; flex-wrap:wrap; gap:5px}
+  .opts button{
+    font:inherit; color:var(--dim); background:none; border:1px solid var(--line);
+    padding:4px 9px; cursor:pointer; border-radius:2px;
+  }
+  .opts button:hover{color:var(--ink)}
+  .opts button:focus-visible{outline:1px solid var(--ink); outline-offset:1px}
+  .opts button[aria-pressed="true"]{color:var(--bg); background:var(--ink); border-color:var(--ink)}
+  #textmask{
+    width:100%; margin-top:7px; font:inherit; color:var(--ink); background:var(--bg);
+    border:1px solid var(--line); padding:5px 8px; border-radius:2px; display:none;
+  }
+  #textmask:focus-visible{outline:1px solid var(--ink)}
+  .actions{display:flex; gap:6px}
+  .actions button{
+    flex:1; font:inherit; background:none; color:var(--ink); border:1px solid var(--dim);
+    padding:7px 0; cursor:pointer; border-radius:2px;
+  }
+  .actions button:hover{border-color:var(--ink)}
+  .actions button:focus-visible{outline:1px solid var(--ink); outline-offset:1px}
+  #readout{border-top:1px solid var(--line); padding-top:14px; color:var(--dim)}
+  #readout table{width:100%; border-collapse:collapse}
+  #readout td{padding:2px 0; vertical-align:top}
+  #readout td:last-child{text-align:right; color:var(--ink)}
+  #stagewrap{flex:1; position:relative; min-width:0}
+  canvas{position:absolute; inset:0; width:100%; height:100%; display:block}
+  footer{
+    padding:10px 20px; border-top:1px solid var(--line); color:var(--dim); font-size:12px;
+    display:flex; gap:1.5em; flex-wrap:wrap;
+  }
+  @media (max-width:760px){
+    main{flex-direction:column}
+    #rail{width:100%; border-right:none; border-bottom:1px solid var(--line);
+      flex-direction:row; flex-wrap:wrap; gap:14px}
+    .group{min-width:44%}
+    #readout{border-top:none; border-left:1px solid var(--line); padding:0 0 0 14px}
+    #stagewrap{min-height:55vh}
+    header a{margin-left:0}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RasterFairy</h1>
+  <span class="sub">transforms any 2D point cloud into a regular grid, preserving neighborhoods &middot; Mario Klingemann, 2016</span>
+  <a href="https://github.com/Quasimondo/RasterFairy">github.com/Quasimondo/RasterFairy</a>
+</header>
+
+<main>
+  <div id="rail">
+    <div class="group">
+      <label class="head">Cloud</label>
+      <div class="opts" id="cloudOpts" role="group" aria-label="Cloud type">
+        <button data-v="clusters">clusters</button>
+        <button data-v="ring">ring</button>
+        <button data-v="spiral">spiral</button>
+        <button data-v="uniform">uniform</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <label class="head">Points</label>
+      <div class="opts" id="countOpts" role="group" aria-label="Point count">
+        <button data-v="256">256</button>
+        <button data-v="1024">1024</button>
+        <button data-v="2048">2048</button>
+        <button data-v="4096">4096</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <label class="head">Target grid</label>
+      <div class="opts" id="targetOpts" role="group" aria-label="Target grid">
+        <button data-v="auto">auto rect</button>
+        <button data-v="square">square</button>
+        <button data-v="circle">circle</button>
+        <button data-v="hex">hex</button>
+        <button data-v="text">text mask</button>
+      </div>
+      <input id="textmask" type="text" value="RF" maxlength="12" aria-label="Text for mask" spellcheck="false">
+    </div>
+
+    <div class="group actions">
+      <button id="morphBtn">to cloud</button>
+      <button id="reseedBtn">reseed</button>
+    </div>
+
+    <div class="group" id="readout">
+      <table>
+        <tr><td>points</td><td id="roN">–</td></tr>
+        <tr><td>grid</td><td id="roGrid">–</td></tr>
+        <tr><td>transform</td><td id="roT">–</td></tr>
+        <tr><td>kNN kept (k=8)</td><td id="roKnn">–</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div id="stagewrap"><canvas id="stage"></canvas></div>
+</main>
+
+<footer>
+  <span>every run computes live in this page — a JavaScript port of the algorithm</span>
+  <span>cite as: “Raster Fairy by Mario Klingemann”</span>
+</footer>
+
+<script>
+'use strict';
+/* ------------------------------------------------------------------ */
+/* RasterFairy core — JS port of the recursive slicing transform.      */
+/* Mask-based path: works for full rectangles and arbitrary masks.     */
+/* ------------------------------------------------------------------ */
+
+function rasterFairyTransform(points, mask){
+  const n = points.length, W = mask.w, H = mask.h;
+  // normalize points into grid coordinate space (scale independence)
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for(const p of points){
+    if(p[0]<minX)minX=p[0]; if(p[0]>maxX)maxX=p[0];
+    if(p[1]<minY)minY=p[1]; if(p[1]>maxY)maxY=p[1];
+  }
+  const sx=(maxX-minX)||1, sy=(maxY-minY)||1;
+  const px=new Float64Array(n), py=new Float64Array(n);
+  for(let i=0;i<n;i++){
+    px[i]=(points[i][0]-minX)/sx*(W-1);
+    py[i]=(points[i][1]-minY)/sy*(H-1);
+  }
+  const free = mask.free.slice(); // 1 = usable cell
+  const out = new Float64Array(2*n);
+
+  const freeAt=(x,y)=>free[y*W+x];
+
+  function cropGrid(g){ // trim empty edge rows/cols, in place
+    let changed=true;
+    while(changed && g[2]>0 && g[3]>0){
+      changed=false;
+      let s;
+      s=0; for(let y=g[1];y<g[1]+g[3];y++) s+=freeAt(g[0],y);
+      if(!s){g[0]++;g[2]--;changed=true;continue}
+      s=0; for(let y=g[1];y<g[1]+g[3];y++) s+=freeAt(g[0]+g[2]-1,y);
+      if(!s){g[2]--;changed=true;continue}
+      s=0; for(let x=g[0];x<g[0]+g[2];x++) s+=freeAt(x,g[1]);
+      if(!s){g[1]++;g[3]--;changed=true;continue}
+      s=0; for(let x=g[0];x<g[0]+g[2];x++) s+=freeAt(x,g[1]+g[3]-1);
+      if(!s){g[3]--;changed=true}
+    }
+  }
+
+  function assignScanline(idx,g){ // fallback + leaf assignment
+    const cells=[];
+    for(let y=g[1];y<g[1]+g[3] && cells.length<idx.length;y++)
+      for(let x=g[0];x<g[0]+g[2] && cells.length<idx.length;x++)
+        if(freeAt(x,y)) cells.push([x,y]);
+    idx.sort((a,b)=> py[a]-py[b] || px[a]-px[b]);
+    for(let i=0;i<idx.length;i++){
+      const c=cells[i]||cells[cells.length-1];
+      out[2*idx[i]]=c[0]; out[2*idx[i]+1]=c[1];
+      free[c[1]*W+c[0]]=0;
+    }
+  }
+
+  const stack=[{idx:Array.from({length:n},(_,i)=>i), g:[0,0,W,H]}];
+  while(stack.length){
+    const q=stack.pop();
+    cropGrid(q.g);
+    if(q.idx.length===1){ assignScanline(q.idx,q.g); continue; }
+    const g=q.g, half=q.idx.length>>1;
+
+    // free-cell counts per column / row of the subgrid
+    let countX=0, splitCol=0;
+    for(let x=g[0]; x<g[0]+g[2] && countX<half; x++){
+      let c=0; for(let y=g[1];y<g[1]+g[3];y++) c+=freeAt(x,y);
+      countX+=c; splitCol=x-g[0]+1;
+    }
+    let countY=0, splitRow=0;
+    for(let y=g[1]; y<g[1]+g[3] && countY<half; y++){
+      let c=0; for(let x=g[0];x<g[0]+g[2];x++) c+=freeAt(x,y);
+      countY+=c; splitRow=y-g[1]+1;
+    }
+
+    const mk=(idx,g)=>({idx,g});
+    let sX=null;
+    if(countX>0 && countX<q.idx.length && splitCol<g[2]){
+      const o=q.idx.slice().sort((a,b)=> px[a]-px[b] || py[a]-py[b]);
+      sX=[mk(o.slice(0,countX),[g[0],g[1],splitCol,g[3]]),
+          mk(o.slice(countX),[g[0]+splitCol,g[1],g[2]-splitCol,g[3]])];
+    }
+    let sY=null;
+    if(countY>0 && countY<q.idx.length && splitRow<g[3]){
+      const o=q.idx.slice().sort((a,b)=> py[a]-py[b] || px[a]-px[b]);
+      sY=[mk(o.slice(0,countY),[g[0],g[1],g[2],splitRow]),
+          mk(o.slice(countY),[g[0],g[1]+splitRow,g[2],g[3]-splitRow])];
+    }
+    if(!sX && !sY){ assignScanline(q.idx,q.g); continue; }
+
+    let pick;
+    if(sX && sY){
+      const dev=s=>Math.max(...s.map(o=>{
+        const w=Math.max(o.g[2],1),h=Math.max(o.g[3],1);
+        return Math.abs(1-Math.min(w,h)/Math.max(w,h));
+      }));
+      pick = dev(sX)<=dev(sY) ? sX : sY;
+    } else pick = sX||sY;
+    stack.push(pick[0],pick[1]);
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Target masks                                                        */
+/* ------------------------------------------------------------------ */
+
+function rectArrangement(n){ // divisor pairs, closest to square first
+  let best=null;
+  for(let d=1; d*d<=n; d++) if(n%d===0) best=[d,n/d];
+  return best;
+}
+function fullMask(w,h,keep){ // keep=n cells, drop extras from bottom row end
+  const free=new Uint8Array(w*h).fill(1);
+  let drop=w*h-keep;
+  for(let i=w*h-1; i>=0 && drop>0; i--){ free[i]=0; drop--; }
+  return {w,h,free,hex:false};
+}
+function makeRect(n,mode){
+  if(mode==='auto'){
+    const r=rectArrangement(n);
+    if(r && r[0]/r[1]>=0.4) return {w:r[1],h:r[0],free:new Uint8Array(r[0]*r[1]).fill(1),hex:false};
+  }
+  const w=Math.ceil(Math.sqrt(n)), h=Math.ceil(n/w);
+  return fullMask(w,h,n);
+}
+function makeCircle(n,hex){
+  const f=hex?Math.sqrt(3)/2:1;
+  let r=Math.sqrt(n/Math.PI)/Math.sqrt(f);
+  for(;;r+=0.15){
+    const w=Math.ceil(2*r)+2, h=Math.ceil(2*r/f)+2, cx=w/2-0.5, cy=(h/2-0.5);
+    const cells=[];
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      const hx=hex? x+(y%2?0.5:0) : x, hy=y*f;
+      const d=(hx-cx)**2+(hy-cy*f)**2;
+      if(d<=r*r) cells.push([d,y*w+x]);
+    }
+    if(cells.length>=n){
+      cells.sort((a,b)=>a[0]-b[0]);
+      const free=new Uint8Array(w*h);
+      for(let i=0;i<n;i++) free[cells[i][1]]=1;
+      return {w,h,free,hex};
+    }
+  }
+}
+function makeTextMask(n,text){
+  text=text.trim()||'RF';
+  for(let gw=Math.ceil(Math.sqrt(n))*2;;gw=Math.round(gw*1.25)){
+    const c=document.createElement('canvas');
+    const meas=c.getContext('2d');
+    meas.font='900 100px '+getComputedStyle(document.body).fontFamily;
+    const m=meas.measureText(text);
+    const ar=(m.actualBoundingBoxAscent+m.actualBoundingBoxDescent)/m.width;
+    const gh=Math.max(5,Math.round(gw*ar));
+    c.width=gw; c.height=gh;
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.fillStyle='#fff'; ctx.textBaseline='middle'; ctx.textAlign='center';
+    let fs=gh*1.2;
+    do{ ctx.font=`900 ${fs}px ${getComputedStyle(document.body).fontFamily}`; fs*=0.94; }
+    while(ctx.measureText(text).width>gw*0.96 && fs>4);
+    ctx.fillText(text,gw/2,gh/2);
+    const a=ctx.getImageData(0,0,gw,gh).data;
+    const cells=[];
+    for(let i=0;i<gw*gh;i++) if(a[4*i+3]>96) cells.push(i);
+    if(cells.length>=n){
+      const free=new Uint8Array(gw*gh);
+      cells.forEach(i=>free[i]=1);
+      // trim excess from thinnest spots: fewest filled neighbors first
+      let excess=cells.length-n;
+      while(excess>0){
+        let worst=-1,worstN=9;
+        for(const i of cells){
+          if(!free[i])continue;
+          const x=i%gw,y=(i/gw)|0; let nn=0;
+          for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+            const xx=x+dx,yy=y+dy;
+            if(xx>=0&&yy>=0&&xx<gw&&yy<gh&&free[yy*gw+xx])nn++;
+          }
+          if(nn<worstN){worstN=nn;worst=i;if(nn<=3)break;}
+        }
+        free[worst]=0; excess--;
+      }
+      return {w:gw,h:gh,free,hex:false};
+    }
+    if(gw>600) return makeRect(n,'square'); // give up gracefully
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Clouds                                                              */
+/* ------------------------------------------------------------------ */
+let seed=1;
+function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff; }
+function gauss(){ return (rnd()+rnd()+rnd()+rnd()-2)*1.15; }
+function makeCloud(type,n){
+  const pts=[];
+  if(type==='clusters'){
+    const k=5+((rnd()*5)|0), cs=[];
+    for(let i=0;i<k;i++) cs.push([rnd()*20-10, rnd()*20-10, 0.8+rnd()*2.2]);
+    for(let i=0;i<n;i++){ const c=cs[i%k]; pts.push([c[0]+gauss()*c[2], c[1]+gauss()*c[2]]); }
+  } else if(type==='ring'){
+    for(let i=0;i<n;i++){ const a=rnd()*Math.PI*2, r=8+gauss()*0.9;
+      pts.push([Math.cos(a)*r, Math.sin(a)*r]); }
+  } else if(type==='spiral'){
+    for(let i=0;i<n;i++){ const t=rnd()*4.2*Math.PI, r=0.5+t*0.75;
+      pts.push([Math.cos(t)*r+gauss()*0.35, Math.sin(t)*r+gauss()*0.35]); }
+  } else {
+    for(let i=0;i<n;i++) pts.push([rnd()*20-10, rnd()*20-10]);
+  }
+  return pts;
+}
+
+/* ------------------------------------------------------------------ */
+/* Metric: fraction of original 8-NN preserved on the grid             */
+/* ------------------------------------------------------------------ */
+function knnPreservation(cloud, grid, done){
+  const n=cloud.length, k=8;
+  if(n>4096){ done(null); return; }
+  const nn=(pts)=>{
+    const res=new Int32Array(n*k);
+    for(let i=0;i<n;i++){
+      const bd=new Float64Array(k).fill(Infinity), bi=new Int32Array(k).fill(-1);
+      for(let j=0;j<n;j++){
+        if(i===j)continue;
+        const dx=pts[2*i]-pts[2*j], dy=pts[2*i+1]-pts[2*j+1], d=dx*dx+dy*dy;
+        if(d<bd[k-1]){
+          let p=k-1;
+          while(p>0&&bd[p-1]>d){bd[p]=bd[p-1];bi[p]=bi[p-1];p--;}
+          bd[p]=d;bi[p]=j;
+        }
+      }
+      res.set(bi,i*k);
+    }
+    return res;
+  };
+  const flat=new Float64Array(2*n);
+  cloud.forEach((p,i)=>{flat[2*i]=p[0];flat[2*i+1]=p[1];});
+  setTimeout(()=>{
+    const a=nn(flat), b=nn(grid);
+    let kept=0;
+    for(let i=0;i<n;i++){
+      const s=new Set(); for(let j=0;j<k;j++)s.add(a[i*k+j]);
+      for(let j=0;j<k;j++) if(s.has(b[i*k+j])) kept++;
+    }
+    done(kept/(n*k));
+  },30);
+}
+
+/* ------------------------------------------------------------------ */
+/* Stage: render + morph                                               */
+/* ------------------------------------------------------------------ */
+const cv=document.getElementById('stage'), cx=cv.getContext('2d');
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let state={cloud:[],grid:null,mask:null,colors:[],scrA:null,scrB:null,pt:2,
+           t:1,anim:null};
+
+function fitBox(getX,getY,n){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(let i=0;i<n;i++){const x=getX(i),y=getY(i);
+    if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+  return [x0,y0,Math.max(x1-x0,1e-9),Math.max(y1-y0,1e-9)];
+}
+function project(){
+  const dpr=devicePixelRatio||1;
+  const w=cv.clientWidth*dpr, h=cv.clientHeight*dpr;
+  if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;}
+  const n=state.cloud.length, pad=Math.min(w,h)*0.08;
+  const f=state.mask.hex?Math.sqrt(3)/2:1;
+  const gx=i=>state.grid[2*i]+(state.mask.hex&&(state.grid[2*i+1]%2)?0.5:0);
+  const gy=i=>state.grid[2*i+1]*f;
+  const bc=fitBox(i=>state.cloud[i][0],i=>state.cloud[i][1],n);
+  const bg=fitBox(gx,gy,n);
+  const map=(b)=>{
+    const s=Math.min((w-2*pad)/b[2],(h-2*pad)/b[3]);
+    const ox=(w-b[2]*s)/2, oy=(h-b[3]*s)/2;
+    return [s,ox-b[0]*s,oy-b[1]*s];
+  };
+  const mc=map(bc), mg=map(bg);
+  state.scrA=new Float64Array(2*n); state.scrB=new Float64Array(2*n);
+  for(let i=0;i<n;i++){
+    state.scrA[2*i]  =state.cloud[i][0]*mc[0]+mc[1];
+    state.scrA[2*i+1]=state.cloud[i][1]*mc[0]+mc[2];
+    state.scrB[2*i]  =gx(i)*mg[0]+mg[1];
+    state.scrB[2*i+1]=gy(i)*mg[0]+mg[2];
+  }
+  state.pt=Math.max(2,mg[0]*0.62);
+}
+
+function colorize(){
+  const n=state.cloud.length;
+  const b=fitBox(i=>state.cloud[i][0],i=>state.cloud[i][1],n,n);
+  state.colors=new Array(n);
+  for(let i=0;i<n;i++){
+    const u=(state.cloud[i][0]-b[0])/b[2], v=(state.cloud[i][1]-b[1])/b[3];
+    state.colors[i]=`hsl(${(u*300)|0} 85% ${(28+v*46)|0}%)`;
+  }
+}
+function ease(t){return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2}
+function draw(){
+  const n=state.cloud.length;
+  cx.clearRect(0,0,cv.width,cv.height);
+  const s=state.pt, half=s/2;
+  for(let i=0;i<n;i++){
+    // left-to-right wave: each point's progress is offset by its x position
+    const phase=state.scrA[2*i]/cv.width;
+    const k=ease(Math.min(1,Math.max(0, state.t*1.35 - phase*0.35)));
+    const x=state.scrA[2*i]+(state.scrB[2*i]-state.scrA[2*i])*k;
+    const y=state.scrA[2*i+1]+(state.scrB[2*i+1]-state.scrA[2*i+1])*k;
+    cx.fillStyle=state.colors[i];
+    cx.fillRect(x-half,y-half,s,s);
+  }
+}
+function morphTo(target){ // 1 = grid, 0 = cloud
+  if(state.anim)cancelAnimationFrame(state.anim);
+  if(reduceMotion){state.t=target;draw();return;}
+  const dur=1300, from=state.t, t0=performance.now();
+  const step=(now)=>{
+    const p=Math.min(1,(now-t0)/dur);
+    state.t=from+(target-from)*p;
+    draw();
+    if(p<1)state.anim=requestAnimationFrame(step); else state.anim=null;
+  };
+  state.anim=requestAnimationFrame(step);
+}
+
+/* ------------------------------------------------------------------ */
+/* UI wiring                                                           */
+/* ------------------------------------------------------------------ */
+const cfg={cloud:'clusters',count:1024,target:'auto',text:'RF'};
+const $=id=>document.getElementById(id);
+function wireOpts(id,key){
+  const el=$(id);
+  el.querySelectorAll('button').forEach(b=>{
+    b.setAttribute('aria-pressed', String(b.dataset.v)===String(cfg[key]));
+    b.onclick=()=>{
+      cfg[key]= key==='count'?+b.dataset.v:b.dataset.v;
+      el.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x===b));
+      if(key==='target')$('textmask').style.display=cfg.target==='text'?'block':'none';
+      run();
+    };
+  });
+}
+wireOpts('cloudOpts','cloud'); wireOpts('countOpts','count'); wireOpts('targetOpts','target');
+$('textmask').onchange=()=>{cfg.text=$('textmask').value; if(cfg.target==='text')run();};
+$('reseedBtn').onclick=()=>{seed=(Math.random()*1e9)|0; run();};
+$('morphBtn').onclick=()=>{
+  const toGrid=state.t<0.5;
+  $('morphBtn').textContent=toGrid?'to cloud':'to grid';
+  morphTo(toGrid?1:0);
+};
+
+function run(){
+  state.cloud=makeCloud(cfg.cloud,cfg.count);
+  let mask;
+  if(cfg.target==='auto'||cfg.target==='square') mask=makeRect(cfg.count,cfg.target);
+  else if(cfg.target==='circle') mask=makeCircle(cfg.count,false);
+  else if(cfg.target==='hex') mask=makeCircle(cfg.count,true);
+  else mask=makeTextMask(cfg.count,cfg.text);
+  state.mask=mask;
+
+  const t0=performance.now();
+  state.grid=rasterFairyTransform(state.cloud,mask);
+  const dt=performance.now()-t0;
+
+  colorize(); project();
+  state.t=0; $('morphBtn').textContent='to cloud';
+  morphTo(1);
+
+  $('roN').textContent=cfg.count;
+  let freeCount=0; mask.free.forEach(v=>freeCount+=v);
+  $('roGrid').textContent=(cfg.target==='auto'||cfg.target==='square')
+      ? mask.w+'×'+mask.h : mask.w+'×'+mask.h+' mask';
+  $('roT').textContent=dt.toFixed(1)+' ms';
+  $('roKnn').textContent='…';
+  knnPreservation(state.cloud,state.grid,v=>{
+    $('roKnn').textContent=v==null?'—':(v*100).toFixed(1)+' %';
+  });
+}
+
+addEventListener('resize',()=>{if(state.grid){project();draw();}});
+run();
+</script>
+</body>
+</html>
